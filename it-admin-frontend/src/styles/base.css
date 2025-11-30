@@ -1,0 +1,42 @@
+/* base.css - Global resets and CSS variables */
+:root {
+  --font-primary: 'Inter', sans-serif;
+  --color-primary: #0d6efd;
+  --color-secondary: #6c757d;
+  --color-accent: #198754;
+  --color-background: #f8fafc;
+  --color-foreground: #212529;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-primary);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
