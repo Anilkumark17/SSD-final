@@ -129,6 +129,8 @@ router.patch('/:id', protect, async (req, res) => {
     
     await bed.save();
 
+    const populatedBed = await Bed.findById(bed._id).populate('ward');
+
     // Emit socket event
     const io = req.app.get('io');
     io.emit('bed:updated', {
@@ -137,20 +139,42 @@ router.patch('/:id', protect, async (req, res) => {
       ward: bed.ward
     });
 
-    // Check for occupancy alert
-    if (status === 'occupied') {
-      const totalBeds = await Bed.countDocuments({ ward: bed.ward });
-      const occupiedBeds = await Bed.countDocuments({ ward: bed.ward, status: 'occupied' });
-      const percentage = (occupiedBeds / totalBeds) * 100;
+    // Check occupancy and bed availability, create alerts if needed
+    const { checkOccupancyThreshold, createAlert } = require('../services/alertService');
+    await checkOccupancyThreshold(bed.ward, io);
 
-      if (percentage >= 90) {
-        io.emit('alert:occupancy', {
-          type: 'CRITICAL_OCCUPANCY',
-          ward: bed.ward,
-          percentage: Math.round(percentage),
-          message: `Critical occupancy in ${bed.ward}: ${Math.round(percentage)}%`
-        });
-      }
+    // Create specific alerts for bed status changes
+    const Ward = require('../models/Ward');
+    const wardInfo = await Ward.findById(bed.ward);
+    
+    if (status === 'cleaning') {
+      await createAlert({
+        type: 'BED_UNAVAILABLE',
+        severity: 'info',
+        message: `🧹 Bed ${populatedBed.bedNumber} in ${wardInfo?.name} is now being cleaned`,
+        ward: bed.ward,
+        io
+      });
+    } else if (status === 'maintenance') {
+      await createAlert({
+        type: 'BED_UNAVAILABLE',
+        severity: 'warning',
+        message: `🔧 Bed ${populatedBed.bedNumber} in ${wardInfo?.name} is under maintenance`,
+        ward: bed.ward,
+        io
+      });
+    } else if (status === 'reserved') {
+      await createAlert({
+        type: 'BED_UNAVAILABLE',
+        severity: 'info',
+        message: `📌 Bed ${populatedBed.bedNumber} in ${wardInfo?.name} has been reserved`,
+        ward: bed.ward,
+        io
+      });
+    } else if (status === 'available') {
+      // Bed became available - good news!
+      const { createBedAvailableAlert } = require('../services/alertService');
+      await createBedAvailableAlert(populatedBed, io);
     }
 
     res.status(200).json({

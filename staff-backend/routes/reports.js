@@ -78,29 +78,41 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER', 
 // @access  Private
 router.get('/summary', protect, async (req, res) => {
   try {
+    const Ward = require('../models/Ward');
     const now = new Date();
     const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-    // Get ICU stats
-    const icuTotal = await Bed.countDocuments({ ward: 'ICU' });
-    const icuOccupied = await Bed.countDocuments({ ward: 'ICU', status: 'occupied' });
-    const icuCleaning = await Bed.countDocuments({ ward: 'ICU', status: 'cleaning' });
-    const icuAvailable = await Bed.countDocuments({ ward: 'ICU', status: 'available' });
+    // Get ICU ward
+    const icuWard = await Ward.findOne({ name: 'ICU' });
+    
+    if (!icuWard) {
+      return res.status(404).json({
+        success: false,
+        message: 'ICU ward not found'
+      });
+    }
+
+    // Get ICU stats using Ward ObjectId
+    const icuTotal = await Bed.countDocuments({ ward: icuWard._id });
+    const icuOccupied = await Bed.countDocuments({ ward: icuWard._id, status: 'occupied' });
+    const icuCleaning = await Bed.countDocuments({ ward: icuWard._id, status: 'cleaning' });
+    const icuAvailable = await Bed.countDocuments({ ward: icuWard._id, status: 'available' });
     const icuPercentage = icuTotal > 0 ? Math.round((icuOccupied / icuTotal) * 100) : 0;
 
     // Get next expected discharge
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const nextDischarge = await Patient.findOne({
       status: 'admitted',
-      admittedAt: { $lt: twentyFourHoursAgo }
+      expectedDischargeDate: { $exists: true, $gte: now }
     })
-      .sort({ admittedAt: 1 })
-      .populate('assignedBed', 'ward');
+      .sort({ expectedDischargeDate: 1 })
+      .populate({
+        path: 'assignedBed',
+        populate: { path: 'ward' }
+      });
 
-    let nextDischargeTime = 'No discharges expected in next 12 hours';
-    if (nextDischarge) {
-      const estimatedDischarge = new Date(nextDischarge.admittedAt.getTime() + 48 * 60 * 60 * 1000);
-      nextDischargeTime = estimatedDischarge.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    let nextDischargeTime = 'No discharges expected';
+    if (nextDischarge && nextDischarge.expectedDischargeDate) {
+      nextDischargeTime = new Date(nextDischarge.expectedDischargeDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     }
 
     const summary = `As of ${timeString}, ICU occupancy is ${icuPercentage}% (${icuOccupied} of ${icuTotal} beds in use). ${icuCleaning} beds under cleaning, ${icuAvailable} available. Next expected discharge at ${nextDischargeTime}.`;
@@ -119,7 +131,7 @@ router.get('/summary', protect, async (req, res) => {
         },
         nextExpectedDischarge: nextDischarge ? {
           patientName: nextDischarge.name,
-          ward: nextDischarge.assignedBed?.ward,
+          ward: nextDischarge.assignedBed?.ward?.name,
           estimatedTime: nextDischargeTime
         } : null
       }

@@ -7,11 +7,14 @@ import './Patients.css';
 
 const Patients = () => {
   const [patients, setPatients] = useState([]);
+  const [filteredPatients, setFilteredPatients] = useState([]);
   const [beds, setBeds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -25,6 +28,15 @@ const Patients = () => {
     expectedDischargeDate: '',
     wardType: '',
     assignedBed: ''
+  });
+
+  const [editForm, setEditForm] = useState({
+    name: '',
+    age: '',
+    gender: 'Male',
+    department: '',
+    priority: 'medium',
+    expectedDischargeDate: ''
   });
 
   const [transferForm, setTransferForm] = useState({

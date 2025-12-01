@@ -13,7 +13,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5174',
+    origin: 'http://localhost:5173',
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     credentials: true
   }
@@ -27,7 +27,7 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5174',
+  origin: 'http://localhost:5173',
   credentials: true
 }));
 app.use(express.json());
@@ -52,6 +52,7 @@ app.use('/api/emergency-requests', require('./routes/emergency'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/bed-requests', require('./routes/bedRequests'));
+app.use('/api/forecasting', require('./routes/forecasting'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

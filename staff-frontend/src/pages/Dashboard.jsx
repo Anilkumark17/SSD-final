@@ -4,6 +4,8 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import AlertNotifications from '../components/AlertNotifications';
+import ForecastingPanel from '../components/ForecastingPanel';
 import './Beds.css';
 import { 
   Users, 
@@ -435,10 +437,16 @@ const Dashboard = () => {
 
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto', paddingBottom: '2rem' }}>
+      {/* Alert Notifications */}
+      <AlertNotifications />
+
       <header style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.875rem', color: '#0f172a', marginBottom: '0.5rem' }}>Dashboard Overview</h1>
         <p style={{ color: '#64748b' }}>Real-time hospital occupancy and activity monitoring</p>
       </header>
+
+      {/* Forecasting Panel */}
+      <ForecastingPanel />
 
       {/* Quick Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>

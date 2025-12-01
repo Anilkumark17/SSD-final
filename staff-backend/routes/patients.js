@@ -129,6 +129,10 @@ router.post('/', protect, async (req, res) => {
         ward: bed.ward,
         currentPatient: patient._id
       });
+
+      // Check occupancy threshold and create alerts if needed
+      const { checkOccupancyThreshold } = require('../services/alertService');
+      await checkOccupancyThreshold(bed.ward._id || bed.ward, io);
     }
 
     // Populate and return
