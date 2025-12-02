@@ -25,6 +25,10 @@ const emergencyRequestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  isEmergencyMode: {
+    type: Boolean,
+    default: false
+  },
   status: {
     type: String,
     enum: ['pending', 'assigned', 'cancelled'],

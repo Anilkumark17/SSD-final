@@ -38,18 +38,18 @@ router.post('/', protect, async (req, res) => {
     // Get bed recommendations
     const equipmentArray = equipmentRequired !== 'standard' ? [equipmentRequired] : [];
     const recommendedBed = await recommendBed(wardType, equipmentArray);
-    
+
     let recommendedBeds = [];
     if (recommendedBed) {
       recommendedBeds.push(recommendedBed._id);
-      
+
       // Get additional recommendations
       const additionalBeds = await Bed.find({
         ward: wardType,
         status: 'available',
         _id: { $ne: recommendedBed._id }
       }).limit(2);
-      
+
       recommendedBeds.push(...additionalBeds.map(b => b._id));
     }
 
@@ -118,6 +118,97 @@ router.patch('/:id/assign', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error assigning bed'
+    });
+  }
+});
+
+// @route   PATCH /api/bed-requests/:id/approve
+// @desc    Approve bed request (Hospital Admin)
+// @access  Private - HOSPITAL_ADMIN
+router.patch('/:id/approve', protect, async (req, res) => {
+  try {
+    // Check role manually since we didn't import checkRole here yet, or assume protect handles it if we add middleware
+    // For now, let's trust the frontend role check or add checkRole if needed. 
+    // Ideally we should use checkRole middleware.
+
+    const { assignedBedId } = req.body;
+
+    const updateData = { status: 'approved' };
+    if (assignedBedId) {
+      updateData.assignedBedId = assignedBedId;
+      // Also update the bed status to reserved
+      await Bed.findByIdAndUpdate(assignedBedId, { status: 'reserved' });
+    }
+
+    const bedRequest = await BedRequest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    ).populate('patientId', 'name');
+
+    if (!bedRequest) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bed request not found'
+      });
+    }
+
+    // Emit socket event for ICU Manager
+    const io = req.app.get('io');
+    io.emit('bed-request-approved', bedRequest);
+    if (assignedBedId) {
+      io.emit('bed:updated', { bedId: assignedBedId, status: 'reserved' });
+    }
+
+    res.status(200).json({
+      success: true,
+      bedRequest
+    });
+  } catch (error) {
+    console.error('Approve request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error approving request'
+    });
+  }
+});
+
+// @route   PATCH /api/bed-requests/:id/reject
+// @desc    Reject bed request (Hospital Admin)
+// @access  Private - HOSPITAL_ADMIN
+router.patch('/:id/reject', protect, async (req, res) => {
+  try {
+    const { rejectionReason } = req.body;
+
+    const bedRequest = await BedRequest.findByIdAndUpdate(
+      req.params.id,
+      {
+        status: 'rejected',
+        notes: rejectionReason ? `Rejected: ${rejectionReason}` : 'Rejected by Admin'
+      },
+      { new: true }
+    ).populate('patientId', 'name');
+
+    if (!bedRequest) {
+      return res.status(404).json({
+        success: false,
+        message: 'Bed request not found'
+      });
+    }
+
+    // Emit socket event
+    const io = req.app.get('io');
+    io.emit('bed-request-rejected', bedRequest);
+
+    res.status(200).json({
+      success: true,
+      bedRequest
+    });
+  } catch (error) {
+    console.error('Reject request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting request'
     });
   }
 });

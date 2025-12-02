@@ -36,7 +36,27 @@ const recommendBed = async (preferredWard, requiredEquipment = []) => {
 
     if (bed) return bed;
 
-    // Last resort: any available bed with required equipment
+    // 4. Try 'Emergency' ward (if not already the preferred one)
+    if (preferredWard !== 'Emergency') {
+      // Emergency ward with equipment
+      if (requiredEquipment.length > 0) {
+        bed = await Bed.findOne({
+          ward: 'Emergency',
+          status: 'available',
+          equipmentType: { $all: requiredEquipment }
+        });
+        if (bed) return bed;
+      }
+
+      // Emergency ward without equipment
+      bed = await Bed.findOne({
+        ward: 'Emergency',
+        status: 'available'
+      });
+      if (bed) return bed;
+    }
+
+    // 5. Last resort: any available bed with required equipment
     if (requiredEquipment.length > 0) {
       bed = await Bed.findOne({
         status: 'available',
@@ -46,7 +66,7 @@ const recommendBed = async (preferredWard, requiredEquipment = []) => {
       if (bed) return bed;
     }
 
-    // Absolute last resort: any available bed
+    // 6. Absolute last resort: any available bed
     bed = await Bed.findOne({
       status: 'available'
     });
@@ -58,4 +78,40 @@ const recommendBed = async (preferredWard, requiredEquipment = []) => {
   }
 };
 
-module.exports = { recommendBed };
+/**
+ * Recommend best available bed across all wards (ER > ICU > General)
+ * @param {Array} requiredEquipment 
+ * @returns {Object|null}
+ */
+const recommendBedGlobal = async (requiredEquipment = []) => {
+  try {
+    // 1. Check ER
+    let bed = await Bed.findOne({ ward: 'Emergency', status: 'available', equipmentType: { $all: requiredEquipment } });
+    if (bed) return bed;
+
+    bed = await Bed.findOne({ ward: 'Emergency', status: 'available' });
+    if (bed) return bed;
+
+    // 2. Check ICU
+    bed = await Bed.findOne({ ward: 'ICU', status: 'available', equipmentType: { $all: requiredEquipment } });
+    if (bed) return bed;
+
+    bed = await Bed.findOne({ ward: 'ICU', status: 'available' });
+    if (bed) return bed;
+
+    // 3. Check General
+    bed = await Bed.findOne({ ward: 'General Ward', status: 'available', equipmentType: { $all: requiredEquipment } });
+    if (bed) return bed;
+
+    bed = await Bed.findOne({ ward: 'General Ward', status: 'available' });
+    if (bed) return bed;
+
+    // 4. Any available
+    return await Bed.findOne({ status: 'available' });
+  } catch (error) {
+    console.error('Error in global bed recommendation:', error);
+    return null;
+  }
+};
+
+module.exports = { recommendBed, recommendBedGlobal };

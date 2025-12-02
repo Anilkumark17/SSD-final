@@ -1,17 +1,18 @@
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  LayoutDashboard, 
-  BedDouble, 
-  Users, 
-  Siren, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  BedDouble,
+  Users,
+  Siren,
+  LogOut,
   Activity,
   Menu,
   X,
   TrendingUp,
   Bell,
-  FileText
+  FileText,
+  CheckCircle
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -24,27 +25,30 @@ const Layout = () => {
   const navItems = [
     // Dashboard - All roles except ER_STAFF can see it
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER', 'WARD_STAFF'] },
-    
+
     // Beds - WARD_STAFF for status updates, ICU_MANAGER for viewing
     { path: '/beds', label: 'Beds', icon: BedDouble, roles: ['WARD_STAFF', 'ICU_MANAGER'] },
-    
+
     // Patients - HOSPITAL_ADMIN (view only), ICU_MANAGER (full access)
     { path: '/patients', label: 'Patients', icon: Users, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER'] },
-    
+
     // Emergency - ER_STAFF (create requests), ICU_MANAGER (allocate beds)
     { path: '/emergency', label: 'Emergency', icon: Siren, roles: ['ER_STAFF', 'ICU_MANAGER'] },
-    
+
     // Alerts - ICU_MANAGER only
     { path: '/alerts', label: 'Alerts', icon: Bell, roles: ['ICU_MANAGER'] },
-    
+
     // Forecasting - HOSPITAL_ADMIN, ICU_MANAGER
     { path: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER'] },
-    
+
     // Reports - HOSPITAL_ADMIN only
     { path: '/reports', label: 'Reports', icon: FileText, roles: ['HOSPITAL_ADMIN'] },
 
     // Admin Panel - HOSPITAL_ADMIN only
     { path: '/admin', label: 'Admin Panel', icon: Users, roles: ['HOSPITAL_ADMIN'] },
+
+    // Bed Approvals - HOSPITAL_ADMIN only
+    { path: '/bed-approvals', label: 'Bed Approvals', icon: CheckCircle, roles: ['HOSPITAL_ADMIN'] },
   ];
 
   // Filter nav items based on user roles
@@ -57,11 +61,11 @@ const Layout = () => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc' }}>
       {/* Sidebar - Desktop */}
-      <aside style={{ 
-        width: '16rem', 
-        background: 'white', 
-        borderRight: '1px solid #e2e8f0', 
-        display: 'flex', 
+      <aside style={{
+        width: '16rem',
+        background: 'white',
+        borderRight: '1px solid #e2e8f0',
+        display: 'flex',
         flexDirection: 'column',
         position: 'fixed',
         height: '100vh',
@@ -69,17 +73,17 @@ const Layout = () => {
         transition: 'transform 0.3s',
         transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(0)',
       }} className="sidebar-desktop">
-        
+
         <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ 
-            width: '2rem', 
-            height: '2rem', 
-            background: '#0d6efd', 
-            borderRadius: '0.5rem', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            color: 'white' 
+          <div style={{
+            width: '2rem',
+            height: '2rem',
+            background: '#0d6efd',
+            borderRadius: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white'
           }}>
             <Activity size={18} />
           </div>
@@ -159,7 +163,7 @@ const Layout = () => {
       </aside>
 
       {/* Mobile Header */}
-      <div style={{ 
+      <div style={{
         display: 'none',
         position: 'fixed',
         top: 0,
@@ -182,8 +186,8 @@ const Layout = () => {
       </div>
 
       {/* Main Content */}
-      <main style={{ 
-        flex: 1, 
+      <main style={{
+        flex: 1,
         marginLeft: '16rem',
         padding: '2rem',
         marginTop: '0',

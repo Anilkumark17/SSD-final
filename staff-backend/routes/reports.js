@@ -12,7 +12,7 @@ const router = express.Router();
 router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    
+
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
@@ -23,7 +23,7 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, r
     for (const ward of wards) {
       const totalBeds = await Bed.countDocuments({ ward });
       const currentOccupied = await Bed.countDocuments({ ward, status: 'occupied' });
-      
+
       // Get historical admission data
       const admissions = await Patient.countDocuments({
         assignedBed: { $exists: true },
@@ -54,6 +54,17 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, r
     const totalOccupiedAll = await Bed.countDocuments({ status: 'occupied' });
     const overallUtilization = totalBedsAll > 0 ? Math.round((totalOccupiedAll / totalBedsAll) * 100) : 0;
 
+    // Request Breakdown (Emergency vs Standard)
+    const EmergencyRequest = require('../models/EmergencyRequest');
+    const emergencyCount = await EmergencyRequest.countDocuments({
+      isEmergencyMode: true,
+      requestedAt: { $gte: start, $lte: end }
+    });
+    const standardCount = await EmergencyRequest.countDocuments({
+      isEmergencyMode: false,
+      requestedAt: { $gte: start, $lte: end }
+    });
+
     res.status(200).json({
       success: true,
       period: { start, end },
@@ -61,6 +72,11 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, r
         totalBeds: totalBedsAll,
         occupied: totalOccupiedAll,
         utilizationPercentage: overallUtilization
+      },
+      requestStats: {
+        emergency: emergencyCount,
+        standard: standardCount,
+        total: emergencyCount + standardCount
       },
       wardBreakdown: utilizationData
     });
@@ -84,7 +100,7 @@ router.get('/summary', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), as
 
     // Get ICU ward
     const icuWard = await Ward.findOne({ name: 'ICU' });
-    
+
     if (!icuWard) {
       return res.status(404).json({
         success: false,

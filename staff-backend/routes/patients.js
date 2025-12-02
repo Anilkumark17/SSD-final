@@ -9,7 +9,7 @@ const router = express.Router();
 // @route   GET /api/patients
 // @desc    Get all patients
 // @access  Private - HOSPITAL_ADMIN, ICU_MANAGER only
-router.get('/', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (req, res) => {
+router.get('/', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER', 'ER_STAFF', 'Medical Staff']), async (req, res) => {
   try {
     const patients = await Patient.find()
       .populate('assignedBed', 'bedNumber ward status')
@@ -37,8 +37,8 @@ router.get('/', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (re
 // @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
 router.post('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
-    const { 
-      name, age, gender, department, 
+    const {
+      name, age, gender, department,
       reasonForAdmission, priority, bedId, expectedDischargeDate
     } = req.body;
 
@@ -66,7 +66,7 @@ router.post('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (r
     // Validate bed availability
     const bed = await Bed.findById(bedId).populate('ward');
     console.log('Bed lookup result:', bed ? `Found: ${bed.bedNumber}` : 'Not found');
-    
+
     if (!bed) {
       return res.status(404).json({
         success: false,
@@ -162,7 +162,7 @@ router.post('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (r
 router.post('/:id/discharge', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
-    
+
     if (!patient) {
       return res.status(404).json({
         success: false,
@@ -180,7 +180,7 @@ router.post('/:id/discharge', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN
     // Update patient status
     patient.status = 'discharged';
     patient.dischargedAt = Date.now();
-    
+
     // Free up the bed
     if (patient.assignedBed) {
       const bed = await Bed.findById(patient.assignedBed).populate('ward');
@@ -238,7 +238,7 @@ router.post('/:id/transfer', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER'
   try {
     const { newBedId } = req.body;
     const patient = await Patient.findById(req.params.id);
-    
+
     if (!patient) {
       return res.status(404).json({
         success: false,
@@ -345,7 +345,7 @@ router.post('/:id/transfer', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER'
 router.put('/:id', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { name, age, priority, expectedDischargeDate, department } = req.body;
-    
+
     const patient = await Patient.findById(req.params.id);
     if (!patient) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -376,7 +376,7 @@ router.put('/:id', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
 router.post('/:id/surgeries', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { procedureName, date, time, surgeon, notes } = req.body;
-    
+
     const patient = await Patient.findById(req.params.id);
     if (!patient) {
       return res.status(404).json({ success: false, message: 'Patient not found' });
@@ -421,7 +421,7 @@ router.delete('/:id', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) =
         bed.status = 'cleaning';
         bed.currentPatient = null;
         await bed.save();
-        
+
         // Emit bed update
         const io = req.app.get('io');
         if (io) {

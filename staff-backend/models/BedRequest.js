@@ -28,7 +28,7 @@ const bedRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'assigned', 'fulfilled', 'cancelled'],
+    enum: ['pending', 'approved', 'assigned', 'fulfilled', 'cancelled'],
     default: 'pending'
   },
   notes: {

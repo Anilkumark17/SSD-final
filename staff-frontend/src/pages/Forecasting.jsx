@@ -1,24 +1,32 @@
 import { useState, useEffect } from 'react';
 import { useSocket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import { 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  TrendingUp,
+  TrendingDown,
   Minus,
   Calendar,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Activity,
+  User
 } from 'lucide-react';
 
 const Forecasting = () => {
   const [forecastData, setForecastData] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [events, setEvents] = useState({ discharges: [], surgeries: [] });
   const [loading, setLoading] = useState(true);
   const { socket } = useSocket();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchForecastData();
     fetchSummary();
+    if (user?.role === 'HOSPITAL_ADMIN') {
+      fetchEvents();
+    }
 
     if (socket) {
       socket.on('bed:updated', fetchForecastData);
@@ -31,7 +39,7 @@ const Forecasting = () => {
         socket.off('patient:discharged');
       };
     }
-  }, [socket]);
+  }, [socket, user]);
 
   const fetchForecastData = async () => {
     try {
@@ -50,6 +58,17 @@ const Forecasting = () => {
       setSummary(data);
     } catch (error) {
       console.error('Error fetching summary:', error);
+    }
+  };
+
+  const fetchEvents = async () => {
+    try {
+      const { data } = await api.get('/forecasting/events?hours=12');
+      if (data.success) {
+        setEvents(data.events);
+      }
+    } catch (error) {
+      console.error('Error fetching events:', error);
     }
   };
 
@@ -135,38 +154,73 @@ const Forecasting = () => {
         </div>
       )}
 
-      {/* Expected Discharges */}
-      {forecastData?.expectedDischarges && forecastData.expectedDischarges.length > 0 && (
-        <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Calendar size={24} style={{ color: '#0d6efd' }} />
-            Expected Discharges (Next 12 Hours)
-          </h3>
+      {/* Upcoming Events Section (Hospital Admin Only) */}
+      {user?.role === 'HOSPITAL_ADMIN' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Discharges */}
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Calendar size={24} style={{ color: '#0d6efd' }} />
+              Expected Discharges (12h)
+            </h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {forecastData.expectedDischarges.map((discharge, index) => (
-              <div key={index} style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
-                <div>
-                  <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>{discharge.patientName}</p>
-                  <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                    {discharge.bedNumber} • {discharge.ward}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Expected Discharge</p>
-                  <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#16a34a' }}>
-                    {new Date(discharge.expectedDischargeTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {events.discharges?.length > 0 ? (
+                events.discharges.map((discharge, index) => (
+                  <div key={index} style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>{discharge.patientName}</p>
+                      <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                        {discharge.bedNumber} • {discharge.ward}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Expected</p>
+                      <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#16a34a' }}>
+                        {new Date(discharge.expectedDischargeTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-4">No discharges expected</div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
 
-      {(!forecastData?.expectedDischarges || forecastData.expectedDischarges.length === 0) && (
-        <div style={{ background: 'white', padding: '3rem', borderRadius: '1rem', border: '1px solid #e2e8f0', textAlign: 'center', color: '#64748b' }}>
-          No expected discharges in the next 12 hours
+          {/* Surgeries */}
+          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Activity size={24} style={{ color: '#e11d48' }} />
+              Upcoming Surgeries (12h)
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {events.surgeries?.length > 0 ? (
+                events.surgeries.map((surgery, index) => (
+                  <div key={index} style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
+                    <div>
+                      <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>{surgery.patientName}</p>
+                      <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                        {surgery.procedure}
+                      </p>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div className="flex items-center justify-end gap-1 text-sm text-gray-600 mb-1">
+                        <User size={12} />
+                        <span>{surgery.surgeon}</span>
+                      </div>
+                      <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e11d48' }}>
+                        {new Date(surgery.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-4">No surgeries scheduled</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

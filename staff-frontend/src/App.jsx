@@ -9,6 +9,7 @@ import Alerts from './pages/Alerts';
 import Reports from './pages/Reports';
 import AdminPanel from './pages/AdminPanel';
 import BedRequests from './pages/BedRequests';
+import BedRequestApproval from './pages/BedRequestApproval';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -27,6 +28,7 @@ function App() {
         <Route path="reports" element={<Reports />} />
         <Route path="admin" element={<AdminPanel />} />
         <Route path="bed-requests" element={<BedRequests />} />
+        <Route path="bed-approvals" element={<BedRequestApproval />} />
       </Route>
     </Routes>
   );
