@@ -43,6 +43,10 @@ io.on('connection', (socket) => {
   });
 });
 
+// Initialize cron jobs for automated tasks
+const { initializeCronJobs } = require('./services/cronJobs');
+initializeCronJobs(io);
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/beds', require('./routes/beds'));

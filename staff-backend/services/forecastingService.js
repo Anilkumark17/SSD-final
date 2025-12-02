@@ -157,7 +157,7 @@ const getUpcomingEvents = async (hoursAhead = 12) => {
     const now = new Date();
     const forecastEnd = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
 
-    // 1. Upcoming Discharges
+    // 1. Upcoming Discharges - with complete patient details
     const upcomingDischarges = await Patient.find({
       assignedBed: { $exists: true },
       status: 'admitted',
@@ -165,25 +165,44 @@ const getUpcomingEvents = async (hoursAhead = 12) => {
         $gte: now,
         $lte: forecastEnd
       }
-    }).populate({
-      path: 'assignedBed',
-      populate: { path: 'ward' }
+    })
+      .populate({
+        path: 'assignedBed',
+        populate: { path: 'ward' }
+      })
+      .populate('doctor', 'name specialization'); // Populate doctor if available
+
+    const discharges = upcomingDischarges.map(p => {
+      const hoursRemaining = Math.max(0, (new Date(p.expectedDischargeDate) - now) / (1000 * 60 * 60));
+
+      return {
+        patientId: p.patientId,
+        patientName: p.name,
+        age: p.age,
+        gender: p.gender,
+        diagnosis: p.reasonForAdmission,
+        priority: p.priority,
+        ward: p.assignedBed?.ward?.name || 'Unknown',
+        wardType: p.assignedBed?.ward?.type || 'Unknown',
+        bedNumber: p.assignedBed?.bedNumber || 'Unknown',
+        doctor: p.doctor?.name || 'Not Assigned',
+        doctorSpecialization: p.doctor?.specialization || '',
+        expectedDischargeTime: p.expectedDischargeDate,
+        hoursRemaining: hoursRemaining.toFixed(1),
+        isUrgent: hoursRemaining < 3
+      };
     });
 
-    const discharges = upcomingDischarges.map(p => ({
-      patientId: p.patientId,
-      patientName: p.name,
-      ward: p.assignedBed?.ward?.name || 'Unknown',
-      bedNumber: p.assignedBed?.bedNumber || 'Unknown',
-      expectedDischargeTime: p.expectedDischargeDate
-    }));
-
-    // 2. Upcoming Surgeries
-    // Find patients with surgeries scheduled
+    // 2. Upcoming Surgeries - with complete details
     const patientsWithSurgeries = await Patient.find({
       'surgeries.status': 'scheduled',
       status: 'admitted'
-    });
+    })
+      .populate({
+        path: 'assignedBed',
+        populate: { path: 'ward' }
+      })
+      .populate('doctor', 'name specialization');
 
     const surgeries = [];
     patientsWithSurgeries.forEach(p => {
@@ -197,13 +216,24 @@ const getUpcomingEvents = async (hoursAhead = 12) => {
           surgeryDateTime.setHours(parseInt(hours), parseInt(minutes));
 
           if (surgeryDateTime >= now && surgeryDateTime <= forecastEnd) {
+            const hoursRemaining = Math.max(0, (surgeryDateTime - now) / (1000 * 60 * 60));
+
             surgeries.push({
               patientId: p.patientId,
               patientName: p.name,
+              age: p.age,
+              gender: p.gender,
+              diagnosis: p.reasonForAdmission,
+              ward: p.assignedBed?.ward?.name || 'Unknown',
+              wardType: p.assignedBed?.ward?.type || 'Unknown',
+              bedNumber: p.assignedBed?.bedNumber || 'Unknown',
               procedure: s.procedureName,
               surgeon: s.surgeon,
+              operatingTheater: s.operatingTheater || 'TBD',
               time: surgeryDateTime,
-              status: s.status
+              status: s.status,
+              hoursRemaining: hoursRemaining.toFixed(1),
+              isUrgent: hoursRemaining < 3
             });
           }
         });

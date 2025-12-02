@@ -18,6 +18,7 @@ const Forecasting = () => {
   const [summary, setSummary] = useState(null);
   const [events, setEvents] = useState({ discharges: [], surgeries: [] });
   const [loading, setLoading] = useState(true);
+  const [wardFilter, setWardFilter] = useState('All'); // Ward filter state
   const { socket } = useSocket();
   const { user } = useAuth();
 
@@ -33,10 +34,22 @@ const Forecasting = () => {
       socket.on('patient:admitted', fetchForecastData);
       socket.on('patient:discharged', fetchForecastData);
 
+      // Listen for forecasting updates from cron job
+      socket.on('forecasting:updated', (data) => {
+        console.log('📊 Received forecasting update:', data);
+        if (data.discharges || data.surgeries) {
+          setEvents({
+            discharges: data.discharges || [],
+            surgeries: data.surgeries || []
+          });
+        }
+      });
+
       return () => {
         socket.off('bed:updated');
         socket.off('patient:admitted');
         socket.off('patient:discharged');
+        socket.off('forecasting:updated');
       };
     }
   }, [socket, user]);
@@ -84,6 +97,23 @@ const Forecasting = () => {
     if (trend === 'increasing') return '#dc2626';
     if (trend === 'decreasing') return '#16a34a';
     return '#64748b';
+  };
+
+  // Filter events by ward
+  const filteredDischarges = wardFilter === 'All'
+    ? events.discharges
+    : events.discharges.filter(d => d.wardType === wardFilter || d.ward === wardFilter);
+
+  const filteredSurgeries = wardFilter === 'All'
+    ? events.surgeries
+    : events.surgeries.filter(s => s.wardType === wardFilter || s.ward === wardFilter);
+
+  // Get unique wards for filter
+  const getUniqueWards = () => {
+    const wards = new Set();
+    events.discharges.forEach(d => wards.add(d.wardType || d.ward));
+    events.surgeries.forEach(s => wards.add(s.wardType || s.ward));
+    return Array.from(wards).filter(w => w !== 'Unknown');
   };
 
   return (
@@ -156,72 +186,214 @@ const Forecasting = () => {
 
       {/* Upcoming Events Section (Hospital Admin Only) */}
       {user?.role === 'HOSPITAL_ADMIN' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Discharges */}
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Calendar size={24} style={{ color: '#0d6efd' }} />
-              Expected Discharges (12h)
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {events.discharges?.length > 0 ? (
-                events.discharges.map((discharge, index) => (
-                  <div key={index} style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
-                    <div>
-                      <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>{discharge.patientName}</p>
-                      <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                        {discharge.bedNumber} • {discharge.ward}
-                      </p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Expected</p>
-                      <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#16a34a' }}>
-                        {new Date(discharge.expectedDischargeTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-gray-500 py-4">No discharges expected</div>
-              )}
+        <>
+          {/* Ward Filter */}
+          <div style={{ background: 'white', padding: '1rem 1.5rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600, color: '#64748b' }}>Filter by Ward:</span>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {['All', ...getUniqueWards()].map(ward => (
+                <button
+                  key={ward}
+                  onClick={() => setWardFilter(ward)}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '0.5rem',
+                    border: wardFilter === ward ? '2px solid #0d6efd' : '1px solid #e2e8f0',
+                    background: wardFilter === ward ? '#eff6ff' : 'white',
+                    color: wardFilter === ward ? '#0d6efd' : '#64748b',
+                    fontWeight: wardFilter === ward ? 600 : 400,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {ward}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Surgeries */}
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Activity size={24} style={{ color: '#e11d48' }} />
-              Upcoming Surgeries (12h)
-            </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Discharges */}
+            <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Calendar size={24} style={{ color: '#0d6efd' }} />
+                  Expected Discharges (12h)
+                </div>
+                <span style={{ background: '#eff6ff', color: '#0d6efd', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 700 }}>
+                  {filteredDischarges.length}
+                </span>
+              </h3>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {events.surgeries?.length > 0 ? (
-                events.surgeries.map((surgery, index) => (
-                  <div key={index} style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid #e2e8f0' }}>
-                    <div>
-                      <p style={{ fontWeight: 600, color: '#0f172a', marginBottom: '0.25rem' }}>{surgery.patientName}</p>
-                      <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-                        {surgery.procedure}
-                      </p>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div className="flex items-center justify-end gap-1 text-sm text-gray-600 mb-1">
-                        <User size={12} />
-                        <span>{surgery.surgeon}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '600px', overflowY: 'auto' }}>
+                {filteredDischarges?.length > 0 ? (
+                  filteredDischarges.map((discharge, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '1.25rem',
+                        background: discharge.isUrgent ? '#fef2f2' : '#f8fafc',
+                        borderRadius: '0.75rem',
+                        border: discharge.isUrgent ? '2px solid #fca5a5' : '1px solid #e2e8f0',
+                        boxShadow: discharge.isUrgent ? '0 4px 6px rgba(220, 38, 38, 0.1)' : 'none'
+                      }}
+                    >
+                      {/* Urgency Banner */}
+                      {discharge.isUrgent && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.5rem', background: '#dc2626', color: 'white', borderRadius: '0.5rem' }}>
+                          <AlertCircle size={16} />
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>URGENT - Less than 3 hours</span>
+                        </div>
+                      )}
+
+                      {/* Patient Name & ID */}
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <h4 style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.125rem', marginBottom: '0.25rem' }}>
+                          {discharge.patientName}
+                        </h4>
+                        <p style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {discharge.patientId}</p>
                       </div>
-                      <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e11d48' }}>
-                        {new Date(surgery.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+
+                      {/* Patient Details Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem', padding: '0.75rem', background: 'white', borderRadius: '0.5rem' }}>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Age / Gender</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{discharge.age} yrs / {discharge.gender}</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Bed / Ward</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{discharge.bedNumber} • {discharge.ward}</p>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Doctor</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{discharge.doctor}</p>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Diagnosis</p>
+                          <p style={{ fontSize: '0.875rem', color: '#475569' }}>{discharge.diagnosis}</p>
+                        </div>
+                      </div>
+
+                      {/* Discharge Time & Countdown */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: discharge.isUrgent ? '#fee2e2' : '#ecfdf5', borderRadius: '0.5rem' }}>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Expected Discharge</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 700, color: discharge.isUrgent ? '#dc2626' : '#16a34a' }}>
+                            {new Date(discharge.expectedDischargeTime).toLocaleString('en-US', {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Time Remaining</p>
+                          <p style={{ fontSize: '1.25rem', fontWeight: 700, color: discharge.isUrgent ? '#dc2626' : '#16a34a' }}>
+                            {discharge.hoursRemaining}h
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-gray-500 py-4">No surgeries scheduled</div>
-              )}
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-8">No discharges expected in this ward</div>
+                )}
+              </div>
+            </div>
+
+            {/* Surgeries */}
+            <div style={{ background: 'white', padding: '2rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <Activity size={24} style={{ color: '#e11d48' }} />
+                  Upcoming Surgeries (12h)
+                </div>
+                <span style={{ background: '#fef2f2', color: '#e11d48', padding: '0.25rem 0.75rem', borderRadius: '999px', fontSize: '0.875rem', fontWeight: 700 }}>
+                  {filteredSurgeries.length}
+                </span>
+              </h3>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '600px', overflowY: 'auto' }}>
+                {filteredSurgeries?.length > 0 ? (
+                  filteredSurgeries.map((surgery, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: '1.25rem',
+                        background: surgery.isUrgent ? '#fef2f2' : '#f8fafc',
+                        borderRadius: '0.75rem',
+                        border: surgery.isUrgent ? '2px solid #fca5a5' : '1px solid #e2e8f0',
+                        boxShadow: surgery.isUrgent ? '0 4px 6px rgba(220, 38, 38, 0.1)' : 'none'
+                      }}
+                    >
+                      {/* Urgency Banner */}
+                      {surgery.isUrgent && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', padding: '0.5rem', background: '#dc2626', color: 'white', borderRadius: '0.5rem' }}>
+                          <AlertCircle size={16} />
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>URGENT - Less than 3 hours</span>
+                        </div>
+                      )}
+
+                      {/* Patient Name & ID */}
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <h4 style={{ fontWeight: 700, color: '#0f172a', fontSize: '1.125rem', marginBottom: '0.25rem' }}>
+                          {surgery.patientName}
+                        </h4>
+                        <p style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {surgery.patientId}</p>
+                      </div>
+
+                      {/* Patient Details Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem', padding: '0.75rem', background: 'white', borderRadius: '0.5rem' }}>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Age / Gender</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{surgery.age} yrs / {surgery.gender}</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Bed / Ward</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{surgery.bedNumber} • {surgery.ward}</p>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Procedure</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#e11d48' }}>{surgery.procedure}</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Surgeon</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{surgery.surgeon}</p>
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>OT</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{surgery.operatingTheater}</p>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b' }}>Diagnosis</p>
+                          <p style={{ fontSize: '0.875rem', color: '#475569' }}>{surgery.diagnosis}</p>
+                        </div>
+                      </div>
+
+                      {/* Surgery Time & Countdown */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: surgery.isUrgent ? '#fee2e2' : '#fef3c7', borderRadius: '0.5rem' }}>
+                        <div>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Scheduled Time</p>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 700, color: surgery.isUrgent ? '#dc2626' : '#ea580c' }}>
+                            {new Date(surgery.time).toLocaleString('en-US', {
+                              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Time Remaining</p>
+                          <p style={{ fontSize: '1.25rem', fontWeight: 700, color: surgery.isUrgent ? '#dc2626' : '#ea580c' }}>
+                            {surgery.hoursRemaining}h
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-8">No surgeries scheduled in this ward</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
