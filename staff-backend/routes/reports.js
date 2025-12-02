@@ -8,8 +8,8 @@ const router = express.Router();
 
 // @route   GET /api/reports/utilization
 // @desc    Get bed utilization report for hospital administration
-// @access  Private - Hospital Admin, ICU Manager
-router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER', 'Medical Staff']), async (req, res) => {
+// @access  Private - HOSPITAL_ADMIN only
+router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     
@@ -75,8 +75,8 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER', 
 
 // @route   GET /api/reports/summary
 // @desc    Get plain-English summary report
-// @access  Private
-router.get('/summary', protect, async (req, res) => {
+// @access  Private - HOSPITAL_ADMIN, ICU_MANAGER
+router.get('/summary', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (req, res) => {
   try {
     const Ward = require('../models/Ward');
     const now = new Date();

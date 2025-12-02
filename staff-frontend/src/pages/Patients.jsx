@@ -3,6 +3,7 @@ import { useSocket } from '../context/SocketContext';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { canAdmitPatients, canDischargePatients, canTransferPatients } from '../utils/roleUtils';
 import './Patients.css';
 
 const Patients = () => {
@@ -207,9 +208,11 @@ const Patients = () => {
     <div className="patients-page">
       <div className="page-header">
         <h1>Patient Management</h1>
-        <button className="primary-btn" onClick={() => setShowPatientForm(true)}>
-          + Add New Patient
-        </button>
+        {canAdmitPatients(user) && (
+          <button className="primary-btn" onClick={() => setShowPatientForm(true)}>
+            + Add New Patient
+          </button>
+        )}
       </div>
 
       {/* Patient List */}
@@ -277,25 +280,45 @@ const Patients = () => {
                   </span>
                 </div>
               )}
+              {patient.surgeries?.length > 0 && (
+                <div className="patient-surgeries-section" style={{ marginTop: '0.75rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem' }}>
+                  <span className="label" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Scheduled Surgeries:</span>
+                  <div className="surgeries-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {patient.surgeries.map((surgery, idx) => (
+                      <div key={idx} className="surgery-item" style={{ fontSize: '0.85rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '0.375rem' }}>
+                        <div style={{ fontWeight: 500 }}>{surgery.procedureName}</div>
+                        <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                          {new Date(surgery.date).toLocaleDateString()} at {surgery.time}
+                        </div>
+                        <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Dr. {surgery.surgeon}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {patient.status === 'admitted' && (
+            {patient.status === 'admitted' && (canDischargePatients(user) || canTransferPatients(user)) && (
               <div className="patient-card-actions">
-                <button 
-                  className="transfer-btn"
-                  onClick={() => {
-                    setSelectedPatient(patient);
-                    setShowTransferModal(true);
-                  }}
-                >
-                  Transfer
-                </button>
-                <button 
-                  className="discharge-btn"
-                  onClick={() => handleDischarge(patient._id)}
-                >
-                  Discharge
-                </button>
+                {canTransferPatients(user) && (
+                  <button 
+                    className="transfer-btn"
+                    onClick={() => {
+                      setSelectedPatient(patient);
+                      setShowTransferModal(true);
+                    }}
+                  >
+                    Transfer
+                  </button>
+                )}
+                {canDischargePatients(user) && (
+                  <button 
+                    className="discharge-btn"
+                    onClick={() => handleDischarge(patient._id)}
+                  >
+                    Discharge
+                  </button>
+                )}
               </div>
             )}
           </div>

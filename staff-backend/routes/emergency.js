@@ -2,14 +2,15 @@ const express = require('express');
 const EmergencyRequest = require('../models/EmergencyRequest');
 const Bed = require('../models/Bed');
 const { protect } = require('../middleware/auth');
+const { checkRole } = require('../middleware/roleAuth');
 const { recommendBed } = require('../utils/bedRecommendation');
 
 const router = express.Router();
 
 // @route   GET /api/emergency-requests
 // @desc    Get all emergency requests
-// @access  Private
-router.get('/', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.get('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const requests = await EmergencyRequest.find()
       .populate('requestedBy', 'name')
@@ -29,8 +30,8 @@ router.get('/', protect, async (req, res) => {
 
 // @route   POST /api/emergency-requests
 // @desc    Create new emergency request
-// @access  Private
-router.post('/', protect, async (req, res) => {
+// @access  Private - ER_STAFF, HOSPITAL_ADMIN
+router.post('/', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { 
       patientName, urgency, preferredWard, 
@@ -70,8 +71,8 @@ router.post('/', protect, async (req, res) => {
 
 // @route   PATCH /api/emergency-requests/:id/assign
 // @desc    Assign bed to emergency request
-// @access  Private
-router.patch('/:id/assign', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.patch('/:id/assign', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { bedId } = req.body;
     
@@ -137,8 +138,8 @@ router.patch('/:id/assign', protect, async (req, res) => {
 
 // @route   PATCH /api/emergency-requests/:id/cancel
 // @desc    Cancel emergency request
-// @access  Private
-router.patch('/:id/cancel', protect, async (req, res) => {
+// @access  Private - ER_STAFF, ICU_MANAGER, HOSPITAL_ADMIN
+router.patch('/:id/cancel', protect, checkRole(['ER_STAFF', 'ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const request = await EmergencyRequest.findById(req.params.id);
     if (!request) {

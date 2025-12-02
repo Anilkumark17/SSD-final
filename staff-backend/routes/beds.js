@@ -1,6 +1,7 @@
 const express = require('express');
 const Bed = require('../models/Bed');
 const { protect } = require('../middleware/auth');
+const { checkRole } = require('../middleware/roleAuth');
 const { recommendBed } = require('../utils/bedRecommendation');
 
 const router = express.Router();
@@ -53,8 +54,8 @@ router.get('/available', protect, async (req, res) => {
 
 // @route   POST /api/beds/recommend
 // @desc    Get recommended beds based on criteria
-// @access  Private
-router.post('/recommend', protect, async (req, res) => {
+// @access  Private - HOSPITAL_ADMIN, ICU_MANAGER only
+router.post('/recommend', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (req, res) => {
   try {
     const { wardType, equipmentType, priority } = req.body;
     
@@ -89,8 +90,8 @@ router.post('/recommend', protect, async (req, res) => {
 
 // @route   PATCH /api/beds/:id
 // @desc    Update bed status
-// @access  Private
-router.patch('/:id', protect, async (req, res) => {
+// @access  Private - WARD_STAFF, HOSPITAL_ADMIN
+router.patch('/:id', protect, checkRole(['WARD_STAFF', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { status, estimatedAvailableTime } = req.body;
     

@@ -3,6 +3,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Login from './pages/Login';
 import Employees from './pages/Employees';
+import Forecasting from './pages/Forecasting';
 import { useAuth } from './context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
@@ -27,8 +28,8 @@ const ProtectedRoute = ({ children }) => {
 function App() {
   return (
     <Router>
-      <ToastContainer 
-        position="top-right" 
+      <ToastContainer
+        position="top-right"
         autoClose={3000}
         hideProgressBar={false}
         newestOnTop
@@ -41,13 +42,21 @@ function App() {
       />
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route 
-          path="/employees" 
+        <Route
+          path="/employees"
           element={
             <ProtectedRoute>
               <Employees />
             </ProtectedRoute>
-          } 
+          }
+        />
+        <Route
+          path="/forecasting"
+          element={
+            <ProtectedRoute>
+              <Forecasting />
+            </ProtectedRoute>
+          }
         />
         <Route path="/" element={<Navigate to="/employees" />} />
       </Routes>

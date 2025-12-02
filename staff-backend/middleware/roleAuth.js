@@ -15,7 +15,8 @@ const checkRole = (allowedRoles) => {
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Insufficient permissions.'
+        message: `Access denied. This action requires one of the following roles: ${allowedRoles.join(', ')}`,
+        userRoles: userRoles
       });
     }
 
@@ -23,4 +24,29 @@ const checkRole = (allowedRoles) => {
   };
 };
 
-module.exports = { checkRole };
+// Strict role check - user must have ALL specified roles
+const checkStrictRole = (requiredRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authenticated'
+      });
+    }
+
+    const userRoles = req.user.roles || [];
+    const hasAllRoles = requiredRoles.every(role => userRoles.includes(role));
+
+    if (!hasAllRoles) {
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. This action requires all of the following roles: ${requiredRoles.join(', ')}`,
+        userRoles: userRoles
+      });
+    }
+
+    next();
+  };
+};
+
+module.exports = { checkRole, checkStrictRole };

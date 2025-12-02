@@ -84,7 +84,7 @@ const generateSummaryReport = async () => {
 
     const reports = await Promise.all(wards.map(async (ward) => {
       const forecast = await predictAvailability(ward._id, 24);
-      
+
       // Find next expected discharge
       const nextDischarge = await Patient.findOne({
         assignedBed: { $exists: true },
@@ -118,11 +118,11 @@ const generateSummaryReport = async () => {
     const summaries = reports.map(r => {
       const { ward, current, forecast, nextExpectedDischarge } = r;
       let summary = `${ward.name}: ${current.occupancyRate}% occupancy (${current.occupied} of ${current.total} beds in use).`;
-      
+
       if (current.cleaning > 0) {
         summary += ` ${current.cleaning} bed${current.cleaning > 1 ? 's' : ''} under cleaning.`;
       }
-      
+
       if (current.available > 0) {
         summary += ` ${current.available} available.`;
       }
@@ -146,7 +146,92 @@ const generateSummaryReport = async () => {
   }
 };
 
+
+
+/**
+ * Get upcoming discharges and surgeries for the next X hours
+ * @param {Number} hoursAhead - Hours to forecast ahead
+ */
+const getUpcomingEvents = async (hoursAhead = 12) => {
+  try {
+    const now = new Date();
+    const forecastEnd = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
+
+    // 1. Upcoming Discharges
+    const upcomingDischarges = await Patient.find({
+      assignedBed: { $exists: true },
+      status: 'admitted',
+      expectedDischargeDate: {
+        $gte: now,
+        $lte: forecastEnd
+      }
+    }).populate({
+      path: 'assignedBed',
+      populate: { path: 'ward' }
+    });
+
+    const discharges = upcomingDischarges.map(p => ({
+      patientId: p.patientId,
+      patientName: p.name,
+      ward: p.assignedBed?.ward?.name || 'Unknown',
+      bedNumber: p.assignedBed?.bedNumber || 'Unknown',
+      expectedDischargeTime: p.expectedDischargeDate
+    }));
+
+    // 2. Upcoming Surgeries
+    // Find patients with surgeries scheduled
+    const patientsWithSurgeries = await Patient.find({
+      'surgeries.status': 'scheduled',
+      status: 'admitted'
+    });
+
+    const surgeries = [];
+    patientsWithSurgeries.forEach(p => {
+      if (p.surgeries && p.surgeries.length > 0) {
+        p.surgeries.forEach(s => {
+          if (s.status !== 'scheduled') return;
+
+          // Combine date and time to check if it falls in window
+          const surgeryDateTime = new Date(s.date);
+          const [hours, minutes] = s.time.split(':');
+          surgeryDateTime.setHours(parseInt(hours), parseInt(minutes));
+
+          if (surgeryDateTime >= now && surgeryDateTime <= forecastEnd) {
+            surgeries.push({
+              patientId: p.patientId,
+              patientName: p.name,
+              procedure: s.procedureName,
+              surgeon: s.surgeon,
+              time: surgeryDateTime,
+              status: s.status
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by time
+    discharges.sort((a, b) => new Date(a.expectedDischargeTime) - new Date(b.expectedDischargeTime));
+    surgeries.sort((a, b) => new Date(a.time) - new Date(b.time));
+
+    return {
+      timeWindow: {
+        start: now,
+        end: forecastEnd,
+        hours: hoursAhead
+      },
+      discharges,
+      surgeries
+    };
+
+  } catch (error) {
+    console.error('Error getting upcoming events:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   predictAvailability,
-  generateSummaryReport
+  generateSummaryReport,
+  getUpcomingEvents
 };

@@ -2,13 +2,14 @@ const express = require('express');
 const Patient = require('../models/Patient');
 const Bed = require('../models/Bed');
 const { protect } = require('../middleware/auth');
+const { checkRole } = require('../middleware/roleAuth');
 
 const router = express.Router();
 
 // @route   GET /api/patients
 // @desc    Get all patients
-// @access  Private
-router.get('/', protect, async (req, res) => {
+// @access  Private - HOSPITAL_ADMIN, ICU_MANAGER only
+router.get('/', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (req, res) => {
   try {
     const patients = await Patient.find()
       .populate('assignedBed', 'bedNumber ward status')
@@ -33,8 +34,8 @@ router.get('/', protect, async (req, res) => {
 
 // @route   POST /api/patients
 // @desc    Admit new patient and assign to bed
-// @access  Private
-router.post('/', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.post('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { 
       name, age, gender, department, 
@@ -157,8 +158,8 @@ router.post('/', protect, async (req, res) => {
 
 // @route   POST /api/patients/:id/discharge
 // @desc    Discharge patient and free up bed
-// @access  Private
-router.post('/:id/discharge', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.post('/:id/discharge', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
     
@@ -232,8 +233,8 @@ router.post('/:id/discharge', protect, async (req, res) => {
 
 // @route   POST /api/patients/:id/transfer
 // @desc    Transfer patient to different bed/ward
-// @access  Private
-router.post('/:id/transfer', protect, async (req, res) => {
+// @access  Private - HOSPITAL_ADMIN, ICU_MANAGER
+router.post('/:id/transfer', protect, checkRole(['HOSPITAL_ADMIN', 'ICU_MANAGER']), async (req, res) => {
   try {
     const { newBedId } = req.body;
     const patient = await Patient.findById(req.params.id);
@@ -294,9 +295,9 @@ router.post('/:id/transfer', protect, async (req, res) => {
     newBed.currentPatient = patient._id;
     await newBed.save();
 
-    // Update patient
+    // Update patient - keep status as 'admitted' (not 'transferred')
     patient.assignedBed = newBedId;
-    patient.status = 'transferred';
+    // Note: patient.status remains 'admitted' - only discharge changes it to 'discharged'
     await patient.save();
 
     // Emit new bed update
@@ -335,6 +336,114 @@ router.post('/:id/transfer', protect, async (req, res) => {
       success: false,
       message: 'Error transferring patient'
     });
+  }
+});
+
+// @route   PUT /api/patients/:id
+// @desc    Update patient details
+// @access  Private - HOSPITAL_ADMIN only
+router.put('/:id', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
+  try {
+    const { name, age, priority, expectedDischargeDate, department } = req.body;
+    
+    const patient = await Patient.findById(req.params.id);
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    if (name) patient.name = name;
+    if (age) patient.age = age;
+    if (priority) patient.priority = priority;
+    if (department) patient.department = department;
+    if (expectedDischargeDate) patient.expectedDischargeDate = expectedDischargeDate;
+
+    await patient.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Patient updated successfully',
+      patient
+    });
+  } catch (error) {
+    console.error('Update patient error:', error);
+    res.status(500).json({ success: false, message: 'Error updating patient' });
+  }
+});
+
+// @route   POST /api/patients/:id/surgeries
+// @desc    Schedule a surgery
+// @access  Private - HOSPITAL_ADMIN only
+router.post('/:id/surgeries', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
+  try {
+    const { procedureName, date, time, surgeon, notes } = req.body;
+    
+    const patient = await Patient.findById(req.params.id);
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    patient.surgeries.push({
+      procedureName,
+      date,
+      time,
+      surgeon,
+      notes,
+      status: 'scheduled'
+    });
+
+    await patient.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Surgery scheduled successfully',
+      patient
+    });
+  } catch (error) {
+    console.error('Schedule surgery error:', error);
+    res.status(500).json({ success: false, message: 'Error scheduling surgery' });
+  }
+});
+
+// @route   DELETE /api/patients/:id
+// @desc    Delete patient record
+// @access  Private - HOSPITAL_ADMIN only
+router.delete('/:id', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    if (!patient) {
+      return res.status(404).json({ success: false, message: 'Patient not found' });
+    }
+
+    // Free up bed if assigned
+    if (patient.assignedBed) {
+      const bed = await Bed.findById(patient.assignedBed);
+      if (bed) {
+        bed.status = 'cleaning';
+        bed.currentPatient = null;
+        await bed.save();
+        
+        // Emit bed update
+        const io = req.app.get('io');
+        if (io) {
+          io.emit('bed:updated', {
+            bedId: bed._id,
+            status: 'cleaning',
+            ward: bed.ward,
+            currentPatient: null
+          });
+        }
+      }
+    }
+
+    await patient.deleteOne();
+
+    res.status(200).json({
+      success: true,
+      message: 'Patient deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete patient error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting patient' });
   }
 });
 

@@ -6,6 +6,8 @@ import Patients from './pages/Patients';
 import Emergency from './pages/Emergency';
 import Forecasting from './pages/Forecasting';
 import Alerts from './pages/Alerts';
+import Reports from './pages/Reports';
+import AdminPanel from './pages/AdminPanel';
 import BedRequests from './pages/BedRequests';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,6 +24,8 @@ function App() {
         <Route path="emergency" element={<Emergency />} />
         <Route path="forecasting" element={<Forecasting />} />
         <Route path="alerts" element={<Alerts />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="admin" element={<AdminPanel />} />
         <Route path="bed-requests" element={<BedRequests />} />
       </Route>
     </Routes>

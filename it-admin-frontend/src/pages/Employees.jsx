@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import EmployeeTable from '../components/EmployeeTable';
 import AddEmployeeModal from '../components/AddEmployeeModal';
 import EditEmployeeModal from '../components/EditEmployeeModal';
 import api from '../api/axios';
-import { 
-  UserPlus, 
-  LogOut, 
-  Users, 
-  UserCheck, 
-  UserX, 
-  Hospital, 
+import {
+  UserPlus,
+  LogOut,
+  Users,
+  UserCheck,
+  UserX,
+  Hospital,
   Search,
   Bell
 } from 'lucide-react';
@@ -54,14 +54,14 @@ const Employees = () => {
   };
 
   // Safe filtering with proper checks
-  const filteredEmployees = Array.isArray(employees) 
+  const filteredEmployees = Array.isArray(employees)
     ? employees.filter(emp => {
-        const name = emp?.name || '';
-        const email = emp?.email || '';
-        const query = searchQuery.toLowerCase();
-        return name.toLowerCase().includes(query) || 
-               email.toLowerCase().includes(query);
-      })
+      const name = emp?.name || '';
+      const email = emp?.email || '';
+      const query = searchQuery.toLowerCase();
+      return name.toLowerCase().includes(query) ||
+        email.toLowerCase().includes(query);
+    })
     : [];
 
   const activeCount = employees.filter(e => e?.isActive === true).length;
@@ -79,7 +79,7 @@ const Employees = () => {
               </div>
               <span className="brand-name">MedAdmin</span>
             </div>
-            
+
             <nav className="nav-links">
               <a href="#" className="nav-link active">Dashboard</a>
               <a href="#" className="nav-link">Departments</a>
@@ -90,13 +90,13 @@ const Employees = () => {
           <div className="nav-right">
             <div className="search-box">
               <Search className="search-icon" />
-              <input 
+              <input
                 type="text"
                 placeholder="Search..."
                 className="search-input"
               />
             </div>
-            
+
             <button className="notification-btn">
               <Bell />
               <span className="notification-badge"></span>
@@ -109,7 +109,7 @@ const Employees = () => {
                 <p className="user-name">{user?.name || 'User'}</p>
                 <p className="user-role">IT Admin</p>
               </div>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="logout-btn"
               >
@@ -127,7 +127,7 @@ const Employees = () => {
             <h1 className="page-title">Employee Management</h1>
             <p className="page-subtitle">Manage access, roles, and status for hospital staff.</p>
           </div>
-          <button 
+          <button
             onClick={() => setIsAddModalOpen(true)}
             className="btn-primary"
           >
@@ -213,23 +213,23 @@ const Employees = () => {
               </button>
             </div>
           ) : (
-            <EmployeeTable 
-              employees={filteredEmployees} 
-              onEdit={(emp) => setEditEmployee(emp)} 
+            <EmployeeTable
+              employees={filteredEmployees}
+              onEdit={(emp) => setEditEmployee(emp)}
             />
           )}
         </div>
       </main>
 
-      <AddEmployeeModal 
-        open={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
+      <AddEmployeeModal
+        open={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
         onUserAdded={fetchEmployees}
       />
 
-      <EditEmployeeModal 
-        open={!!editEmployee} 
-        onClose={() => setEditEmployee(null)} 
+      <EditEmployeeModal
+        open={!!editEmployee}
+        onClose={() => setEditEmployee(null)}
         employee={editEmployee}
         onUserUpdated={fetchEmployees}
       />

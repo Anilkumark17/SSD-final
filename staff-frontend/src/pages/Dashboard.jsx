@@ -6,6 +6,14 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import AlertNotifications from '../components/AlertNotifications';
 import ForecastingPanel from '../components/ForecastingPanel';
+import { 
+  canUpdateBedStatus, 
+  canAdmitPatients, 
+  canDischargePatients,
+  canViewBedDetails,
+  canViewForecasting,
+  hasRole 
+} from '../utils/roleUtils';
 import './Beds.css';
 import { 
   Users, 
@@ -44,11 +52,7 @@ const BedDetailsModal = ({
 }) => {
   if (!bed) return null;
 
-  const hasRole = (role) => {
-    if (!user) return false;
-    if (user.roles && user.roles.includes(role)) return true;
-    return user.role === role;
-  };
+  // Use centralized role checking
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -120,9 +124,36 @@ const BedDetailsModal = ({
                   {new Date(bed.currentPatient.admittedAt).toLocaleDateString()}
                 </span>
               </div>
+            {bed.currentPatient.expectedDischargeDate && (
+              <div className="info-card full-width">
+                <span className="info-card-label">Expected Discharge</span>
+                <span className="info-card-value">
+                  {new Date(bed.currentPatient.expectedDischargeDate).toLocaleString('en-US', {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                  })}
+                </span>
+              </div>
+            )}
+            {bed.currentPatient.surgeries?.length > 0 && (
+              <div className="info-card full-width">
+                <span className="info-card-label">Scheduled Surgeries</span>
+                <div className="surgeries-list" style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {bed.currentPatient.surgeries.map((surgery, idx) => (
+                    <div key={idx} className="surgery-item" style={{ fontSize: '0.85rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '0.375rem', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontWeight: 600, color: '#334155' }}>{surgery.procedureName}</div>
+                      <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                        {new Date(surgery.date).toLocaleDateString()} at {surgery.time}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Dr. {surgery.surgeon}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
 
-            {(hasRole('ICU_MANAGER') || hasRole('Medical Staff')) && (
+            {canDischargePatients(user) && (
               <div className="modal-actions">
                 <button className="discharge-btn"
                   onClick={() => onDischarge(bed.currentPatient._id)}>
@@ -143,14 +174,14 @@ const BedDetailsModal = ({
               {bed.status === 'maintenance' && 'Under maintenance'}
             </p>
 
-            {bed.status === 'available' && (hasRole('ICU_MANAGER') || hasRole('Medical Staff') || hasRole('WARD_STAFF')) && (
+            {canAdmitPatients(user) && bed.status === 'available' && (
               <button className="primary-btn"
                 onClick={() => onAssign(bed)}>
                 Assign Patient to This Bed
               </button>
             )}
 
-            {(hasRole('ICU_MANAGER') || hasRole('Medical Staff') || hasRole('WARD_STAFF')) && (
+            {canUpdateBedStatus(user) && (
               <div className="bed-status-actions">
                 <label>Update Bed Status:</label>
                 <select value={bed.status}
@@ -223,14 +254,24 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [overviewRes, alertsRes, bedsRes] = await Promise.all([
+      const promises = [
         api.get('/dashboard/overview'),
-        api.get('/alerts'),
         api.get('/beds')
-      ]);
-      setStats(overviewRes.data);
-      setAlerts(alertsRes.data);
-      setBeds(bedsRes.data);
+      ];
+
+      // Only fetch alerts if user is ICU_MANAGER
+      if (hasRole(user, 'ICU_MANAGER')) {
+        promises.push(api.get('/alerts'));
+      }
+
+      const results = await Promise.all(promises);
+      
+      setStats(results[0].data);
+      setBeds(results[1].data);
+      
+      if (hasRole(user, 'ICU_MANAGER') && results[2]) {
+        setAlerts(results[2].data);
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -445,8 +486,8 @@ const Dashboard = () => {
         <p style={{ color: '#64748b' }}>Real-time hospital occupancy and activity monitoring</p>
       </header>
 
-      {/* Forecasting Panel */}
-      <ForecastingPanel />
+      {/* Forecasting Panel - HOSPITAL_ADMIN, ICU_MANAGER only */}
+      {canViewForecasting(user) && <ForecastingPanel />}
 
       {/* Quick Stats Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
@@ -503,25 +544,32 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Charts Section - HOSPITAL_ADMIN, ICU_MANAGER only */}
+      {canViewBedDetails(user) && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
         {/* Ward Occupancy Chart */}
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem' }}>Ward Occupancy Levels</h3>
           <div style={{ height: '300px', width: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                <Tooltip 
-                  cursor={{ fill: '#f1f5f9' }}
-                  contentStyle={{ borderRadius: '0.5rem', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                />
-                <Bar dataKey="occupied" name="Occupied" stackId="a" fill="#fca5a5" radius={[0, 0, 4, 4]} />
-                <Bar dataKey="available" name="Available" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {barChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                  <Tooltip 
+                    cursor={{ fill: '#f1f5f9' }}
+                    contentStyle={{ borderRadius: '0.5rem', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                  />
+                  <Bar dataKey="occupied" name="Occupied" stackId="a" fill="#fca5a5" radius={[0, 0, 4, 4]} />
+                  <Bar dataKey="available" name="Available" stackId="a" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
+                No data available
+              </div>
+            )}
           </div>
         </div>
 
@@ -529,30 +577,38 @@ const Dashboard = () => {
         <div style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#0f172a', marginBottom: '1.5rem' }}>Bed Status Distribution</h3>
           <div style={{ height: '300px', width: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36} />
-              </PieChart>
-            </ResponsiveContainer>
+            {pieChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieChartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#64748b' }}>
+                No data available
+              </div>
+            )}
           </div>
         </div>
       </div>
+      )}
 
-      {/* Bed Management Section (Grouped by Ward) */}
+      {/* Bed Management Section - Hide from ER_STAFF, show limited view for WARD_STAFF */}
+      {!hasRole(user, 'ER_STAFF') && (
       <div className="beds-section" style={{ background: 'white', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
         <div className="section-header" style={{ marginBottom: '1.5rem' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#0f172a' }}>Bed Management</h3>
@@ -563,6 +619,7 @@ const Dashboard = () => {
         {renderBedGrid(beds.filter(b => b.ward?.name === 'ER'), 'ER')}
         {renderBedGrid(beds.filter(b => b.ward?.name === 'General Ward'), 'General Ward')}
       </div>
+      )}
 
       {/* Bed Details Modal */}
       {showBedModal && selectedBed && (

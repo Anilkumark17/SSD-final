@@ -61,7 +61,19 @@ const patientSchema = new mongoose.Schema({
   expectedDischargeDate: {
     type: Date,
     default: null
-  }
+  },
+  surgeries: [{
+    procedureName: { type: String, required: true },
+    date: { type: Date, required: true },
+    time: { type: String, required: true },
+    surgeon: { type: String, required: true },
+    status: { 
+      type: String, 
+      enum: ['scheduled', 'completed', 'cancelled'], 
+      default: 'scheduled' 
+    },
+    notes: String
+  }]
 });
 
 // Auto-generate 5-char unique patient ID before saving

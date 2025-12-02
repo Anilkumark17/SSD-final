@@ -1,13 +1,14 @@
 const express = require('express');
 const Alert = require('../models/Alert');
 const { protect } = require('../middleware/auth');
+const { checkRole } = require('../middleware/roleAuth');
 
 const router = express.Router();
 
 // @route   GET /api/alerts
 // @desc    Get all alerts with optional filters
-// @access  Private
-router.get('/', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.get('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const { isRead } = req.query;
     
@@ -34,8 +35,8 @@ router.get('/', protect, async (req, res) => {
 
 // @route   PATCH /api/alerts/:id/read
 // @desc    Mark alert as read
-// @access  Private
-router.patch('/:id/read', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.patch('/:id/read', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const alert = await Alert.findByIdAndUpdate(
       req.params.id,
@@ -65,14 +66,16 @@ router.patch('/:id/read', protect, async (req, res) => {
 
 // @route   POST /api/alerts
 // @desc    Create new alert (internal use)
-// @access  Private
-router.post('/', protect, async (req, res) => {
+// @access  Private - ICU_MANAGER, HOSPITAL_ADMIN
+router.post('/', protect, checkRole(['ICU_MANAGER', 'HOSPITAL_ADMIN']), async (req, res) => {
   try {
     const alert = await Alert.create(req.body);
 
     // Emit socket event
     const io = req.app.get('io');
-    io.emit('alert-created', alert);
+    if (io) {
+      io.emit('alert-created', alert);
+    }
 
     res.status(201).json({
       success: true,

@@ -20,14 +20,31 @@ const Layout = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Navigation items with strict RBAC
   const navItems = [
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ICU_MANAGER', 'WARD_STAFF', 'ER_STAFF', 'HOSPITAL_ADMIN', 'Medical Staff', 'Nurse', 'Doctor'] },
+    // Dashboard - All roles except ER_STAFF can see it
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER', 'WARD_STAFF'] },
+    
+    // Beds - WARD_STAFF for status updates, ICU_MANAGER for viewing
+    { path: '/beds', label: 'Beds', icon: BedDouble, roles: ['WARD_STAFF', 'ICU_MANAGER'] },
+    
+    // Patients - HOSPITAL_ADMIN (view only), ICU_MANAGER (full access)
+    { path: '/patients', label: 'Patients', icon: Users, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER'] },
+    
+    // Emergency - ER_STAFF (create requests), ICU_MANAGER (allocate beds)
+    { path: '/emergency', label: 'Emergency', icon: Siren, roles: ['ER_STAFF', 'ICU_MANAGER'] },
+    
+    // Alerts - ICU_MANAGER only
+    { path: '/alerts', label: 'Alerts', icon: Bell, roles: ['ICU_MANAGER'] },
+    
+    // Forecasting - HOSPITAL_ADMIN, ICU_MANAGER
+    { path: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['HOSPITAL_ADMIN', 'ICU_MANAGER'] },
+    
+    // Reports - HOSPITAL_ADMIN only
+    { path: '/reports', label: 'Reports', icon: FileText, roles: ['HOSPITAL_ADMIN'] },
 
-    { path: '/patients', label: 'Patients', icon: Users, roles: ['ICU_MANAGER', 'WARD_STAFF', 'HOSPITAL_ADMIN', 'Medical Staff', 'Nurse', 'Doctor'] },
-    { path: '/emergency', label: 'Emergency Requests', icon: Siren, roles: ['ICU_MANAGER', 'ER_STAFF', 'HOSPITAL_ADMIN', 'Medical Staff'] },
-    { path: '/bed-requests', label: 'Bed Requests', icon: FileText, roles: ['ICU_MANAGER', 'WARD_STAFF', 'ER_STAFF', 'HOSPITAL_ADMIN', 'Medical Staff'] },
-    { path: '/alerts', label: 'Alerts', icon: Bell, roles: ['ICU_MANAGER', 'WARD_STAFF', 'ER_STAFF', 'HOSPITAL_ADMIN', 'Medical Staff', 'Nurse', 'Doctor'] },
-    { path: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['ICU_MANAGER', 'HOSPITAL_ADMIN', 'Medical Staff'] },
+    // Admin Panel - HOSPITAL_ADMIN only
+    { path: '/admin', label: 'Admin Panel', icon: Users, roles: ['HOSPITAL_ADMIN'] },
   ];
 
   // Filter nav items based on user roles
@@ -51,9 +68,6 @@ const Layout = () => {
         zIndex: 50,
         transition: 'transform 0.3s',
         transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(0)',
-        '@media (max-width: 768px)': {
-           transform: mobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)'
-        }
       }} className="sidebar-desktop">
         
         <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

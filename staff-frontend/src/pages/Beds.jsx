@@ -3,6 +3,7 @@ import { useSocket } from '../context/SocketContext';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
+import { canUpdateBedStatus, canAdmitPatients, canDischargePatients } from '../utils/roleUtils';
 import './Beds.css';
 
 const Beds = () => {
@@ -329,12 +330,14 @@ const Beds = () => {
                     </div>
                   </div>
 
+                  {canDischargePatients(user) && (
                   <button
                     className="discharge-btn"
                     onClick={() => handlePatientDischarge(selectedBed.currentPatient._id)}
                   >
                     Discharge Patient
                   </button>
+                  )}
                 </div>
               ) : (
                 <div className="empty-bed-section">
@@ -347,7 +350,7 @@ const Beds = () => {
                     {selectedBed.status === 'maintenance' && 'Under maintenance'}
                   </p>
 
-                  {selectedBed.status === 'available' && (
+                  {canAdmitPatients(user) && selectedBed.status === 'available' && (
                     <button
                       className="primary-btn"
                       onClick={() => {
@@ -370,20 +373,22 @@ const Beds = () => {
                     </button>
                   )}
 
-                  <div className="bed-status-actions">
-                    <label>Update Bed Status:</label>
-                    <select
-                      value={selectedBed.status}
-                      onChange={(e) => handleBedStatusUpdate(selectedBed._id, e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="available">Available</option>
-                      <option value="occupied">Occupied</option>
-                      <option value="cleaning">Cleaning</option>
-                      <option value="reserved">Reserved</option>
-                      <option value="maintenance">Maintenance</option>
-                    </select>
-                  </div>
+                  {canUpdateBedStatus(user) && (
+                    <div className="bed-status-actions">
+                      <label>Update Bed Status:</label>
+                      <select
+                        value={selectedBed.status}
+                        onChange={(e) => handleBedStatusUpdate(selectedBed._id, e.target.value)}
+                        className="status-select"
+                      >
+                        <option value="available">Available</option>
+                        <option value="occupied">Occupied</option>
+                        <option value="cleaning">Cleaning</option>
+                        <option value="reserved">Reserved</option>
+                        <option value="maintenance">Maintenance</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
