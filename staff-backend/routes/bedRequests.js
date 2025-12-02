@@ -6,6 +6,8 @@ const { recommendBed } = require('../utils/bedRecommendation');
 
 const router = express.Router();
 
+console.log('🔧 BedRequests routes loaded - reject endpoint available');
+
 // @route   GET /api/bed-requests
 // @desc    Get all bed requests
 // @access  Private
@@ -174,27 +176,37 @@ router.patch('/:id/approve', protect, async (req, res) => {
 });
 
 // @route   PATCH /api/bed-requests/:id/reject
-// @desc    Reject bed request (Hospital Admin)
+// @desc    Reject bed request (Hospital Admin)  
 // @access  Private - HOSPITAL_ADMIN
 router.patch('/:id/reject', protect, async (req, res) => {
+  console.log('🚫 REJECT ENDPOINT HIT - ID:', req.params.id);
+  console.log('🚫 Request body:', req.body);
+
   try {
     const { rejectionReason } = req.body;
 
-    const bedRequest = await BedRequest.findByIdAndUpdate(
-      req.params.id,
-      {
-        status: 'rejected',
-        notes: rejectionReason ? `Rejected: ${rejectionReason}` : 'Rejected by Admin'
-      },
-      { new: true }
-    ).populate('patientId', 'name');
+    console.log('🚫 Finding bed request with ID:', req.params.id);
+    const bedRequest = await BedRequest.findById(req.params.id);
 
     if (!bedRequest) {
+      console.log('❌ Bed request not found');
       return res.status(404).json({
         success: false,
         message: 'Bed request not found'
       });
     }
+
+    console.log('✅ Found bed request:', bedRequest._id);
+    console.log('📝 Current status:', bedRequest.status);
+
+    // Update the request
+    bedRequest.status = 'rejected';
+    bedRequest.notes = rejectionReason ? `Rejected: ${rejectionReason}` : 'Rejected by Admin';
+    await bedRequest.save();
+
+    console.log('✅ Bed request rejected successfully');
+
+    await bedRequest.populate('patientId', 'name');
 
     // Emit socket event
     const io = req.app.get('io');
@@ -202,13 +214,15 @@ router.patch('/:id/reject', protect, async (req, res) => {
 
     res.status(200).json({
       success: true,
-      bedRequest
+      bedRequest,
+      message: 'Request rejected successfully'
     });
   } catch (error) {
-    console.error('Reject request error:', error);
+    console.error('❌ Reject request error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error rejecting request'
+      message: 'Error rejecting request',
+      error: error.message
     });
   }
 });

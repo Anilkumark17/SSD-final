@@ -16,21 +16,26 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, r
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    // Get all wards
-    const wards = await Bed.distinct('ward');
+    // Get all wards with their details
+    const Ward = require('../models/Ward');
+    const wards = await Ward.find({});
     const utilizationData = [];
 
     for (const ward of wards) {
-      const totalBeds = await Bed.countDocuments({ ward });
-      const currentOccupied = await Bed.countDocuments({ ward, status: 'occupied' });
+      const totalBeds = await Bed.countDocuments({ ward: ward._id });
+      const currentOccupied = await Bed.countDocuments({ ward: ward._id, status: 'occupied' });
 
-      // Get historical admission data
+      // Get historical admission data for this ward
+      const bedsInWard = await Bed.find({ ward: ward._id }).select('_id');
+      const bedIds = bedsInWard.map(b => b._id);
+
       const admissions = await Patient.countDocuments({
-        assignedBed: { $exists: true },
+        assignedBed: { $in: bedIds },
         admittedAt: { $gte: start, $lte: end }
       });
 
       const discharges = await Patient.countDocuments({
+        assignedBed: { $in: bedIds },
         status: 'discharged',
         dischargedAt: { $gte: start, $lte: end }
       });
@@ -38,7 +43,8 @@ router.get('/utilization', protect, checkRole(['HOSPITAL_ADMIN']), async (req, r
       const avgOccupancy = totalBeds > 0 ? Math.round((currentOccupied / totalBeds) * 100) : 0;
 
       utilizationData.push({
-        ward,
+        ward: ward.name, // Use ward name instead of ObjectId
+        wardId: ward._id,
         totalBeds,
         currentOccupied,
         currentAvailable: totalBeds - currentOccupied,
