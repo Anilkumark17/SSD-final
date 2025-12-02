@@ -316,16 +316,29 @@ router.post('/check-availability', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADM
     let recommendedBed = null;
 
     if (isEmergencyMode) {
-      // Fetch all available beds in Emergency and ICU
-      const beds = await Bed.find({
-        ward: { $in: ['Emergency', 'ICU'] },
-        status: 'available'
-      }).sort({ ward: 1, bedNumber: 1 }); // Sort by Ward (Emergency first usually? Alphabetical: Emergency comes before ICU)
+      // 1. Get Ward IDs for Emergency and ICU
+      const Ward = require('../models/Ward');
+      // Note: Adjust names if your DB uses 'ER' instead of 'Emergency'
+      const targetWards = await Ward.find({
+        $or: [{ name: 'Emergency' }, { name: 'ER' }, { name: 'ICU' }, { type: 'ICU' }, { type: 'ER' }]
+      });
+      const targetWardIds = targetWards.map(w => w._id);
 
-      // Prioritize Emergency ward beds
+      // 2. Fetch available beds in these wards
+      const beds = await Bed.find({
+        ward: { $in: targetWardIds },
+        status: 'available'
+      })
+        .populate('ward')
+        .sort({ bedNumber: 1 });
+
+      // 3. Prioritize Emergency/ER ward beds
       availableBeds = beds.sort((a, b) => {
-        if (a.ward === 'Emergency' && b.ward !== 'Emergency') return -1;
-        if (a.ward !== 'Emergency' && b.ward === 'Emergency') return 1;
+        const isAEmergency = a.ward.name === 'Emergency' || a.ward.name === 'ER' || a.ward.type === 'ER';
+        const isBEmergency = b.ward.name === 'Emergency' || b.ward.name === 'ER' || b.ward.type === 'ER';
+
+        if (isAEmergency && !isBEmergency) return -1;
+        if (!isAEmergency && isBEmergency) return 1;
         return 0;
       });
 
@@ -333,6 +346,7 @@ router.post('/check-availability', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADM
       if (availableBeds.length > 0) {
         // Filter by equipment if needed, or just pick first
         if (requiredEquipment && requiredEquipment.length > 0) {
+          // Note: equipmentType is on the bed document
           recommendedBed = availableBeds.find(b => requiredEquipment.every(eq => b.equipmentType.includes(eq))) || availableBeds[0];
         } else {
           recommendedBed = availableBeds[0];

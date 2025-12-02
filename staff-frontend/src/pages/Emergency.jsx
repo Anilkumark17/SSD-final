@@ -81,6 +81,29 @@ const Emergency = () => {
     }
   };
 
+  const checkAvailability = async () => {
+    try {
+      setChecking(true);
+      const { data } = await api.post('/emergency-requests/check-availability', {
+        preferredWard: formData.preferredWard,
+        requiredEquipment: formData.requiredEquipment,
+        isEmergencyMode
+      });
+      setAvailabilityCheck(data);
+      if (data.availableBeds) {
+        setAvailableBeds(data.availableBeds);
+        // Auto-select recommended bed
+        if (data.recommendedBed) {
+          setSelectedBedId(data.recommendedBed.id);
+        }
+      }
+    } catch (error) {
+      // toast.error('Failed to check availability'); // Suppress toast for auto-check
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const handleCreateRequest = (patient = null) => {
     if (patient) {
       setSelectedPatient(patient);
@@ -477,8 +500,8 @@ const Emergency = () => {
                           style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #bbf7d0', fontWeight: 600, color: '#166534' }}
                         >
                           {availableBeds.map(bed => (
-                            <option key={bed.id} value={bed.id}>
-                              {bed.bedNumber} ({bed.ward}) - {bed.type}
+                            <option key={bed.id || bed._id} value={bed.id || bed._id}>
+                              {bed.bedNumber} ({bed.ward?.name || 'Unknown'}) - {bed.ward?.type || 'Unknown'}
                             </option>
                           ))}
                         </select>
