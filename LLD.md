@@ -28,9 +28,7 @@ graph TD
         Staff_FE["Staff Frontend<br/>(React + Vite)"]
     end
 
-    subgraph "API Gateway / Load Balancer"
-        NGINX[Nginx / Reverse Proxy]
-    end
+
 
     subgraph "Application Layer"
         IT_BE["IT Admin Backend<br/>(Node.js + Express)"]
@@ -228,6 +226,6 @@ The system uses **Socket.IO** to push updates to connected clients, eliminating 
 
 *   **Environment**: Node.js Runtime.
 *   **Process Management**: PM2 or Docker Containers.
-*   **Reverse Proxy**: Nginx (handling SSL termination and routing).
+
 *   **Database**: MongoDB Atlas (Cloud) or Self-Hosted Cluster.
 *   **CI/CD**: GitHub Actions (Conceptual) for automated testing and deployment.
