@@ -1,207 +1,233 @@
-# 📘 Low-Level Design (LLD) - Hospital Management System
+# 📘 Low-Level Design (LLD) - Hospital Bed & Patient Management System
 
-This document details the low-level logic and implementation of the operational storyline, mapping user roles and workflows to specific codebase files, API endpoints, and logic flows.
+## 1. Introduction
+This document provides the detailed Low-Level Design (LLD) for the Hospital Bed & Patient Management System. It serves as a blueprint for the implementation, detailing the system architecture, database schema, component interactions, and security models.
 
----
+### 1.1 Purpose
+To provide a scalable, real-time solution for managing hospital bed occupancy, patient admissions, and emergency workflows, ensuring efficient resource utilization and rapid response times.
 
-## 1️⃣ ICU MANAGER (ANURADHA) — “The Central Navigator”
-
-### Step 1: Login & System Initialization
-**Goal**: Authenticate and load real-time dashboard.
-
-*   **Frontend Logic**:
-    *   **Component**: `Login.jsx` (`staff-frontend/src/pages/Login.jsx`)
-    *   **Action**: Submits credentials to `POST /api/auth/login`.
-    *   **State**: Stores JWT token in `localStorage` or `cookie`.
-    *   **Redirect**: Navigates to `/dashboard`.
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/auth.js` -> `router.post('/login', ...)`
-    *   **Controller**: Verifies email/password using `bcrypt`. Generates JWT with role `ICU_MANAGER`.
-*   **Real-Time Initialization**:
-    *   **Component**: `App.jsx` / `SocketContext.jsx`
-    *   **Logic**: Establishes Socket.IO connection to `http://localhost:5001`.
-    *   **Event Listener**: Listens for `bed:updated`, `patient:admitted`, `alert:created`.
-
-### Step 2: Monitoring Live Status
-**Goal**: View ward-wise bed counts and individual bed details.
-
-*   **Frontend Logic**:
-    *   **Component**: `Dashboard.jsx` (`staff-frontend/src/pages/Dashboard.jsx`)
-    *   **Data Fetching**: Calls `GET /api/dashboard/overview` and `GET /api/beds`.
-    *   **Rendering**: Maps through bed data to render `BedCard` components.
-    *   **Visuals**: Uses conditional CSS classes based on `bed.status` (e.g., `bg-green-100` for available).
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/dashboard.js` -> `router.get('/overview', ...)`
-    *   **Query**: Aggregates counts from `Bed` model: `{ status: 'occupied' }`, `{ status: 'available' }`.
-    *   **Route**: `staff-backend/routes/beds.js` -> `router.get('/', ...)`
-    *   **Query**: `Bed.find().populate('ward').populate('currentPatient')`.
-
-### Step 3: Emergency Bed Allocation
-**Goal**: System recommends bed for emergency request.
-
-*   **Frontend Logic**:
-    *   **Component**: `BedRecommendationModal.jsx` (triggered by ER request).
-    *   **Action**: Calls `POST /api/beds/recommend`.
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/beds.js` -> `router.post('/recommend', ...)`
-    *   **Service**: `utils/bedRecommendation.js` -> `recommendBed()`.
-    *   **Algorithm**:
-        1.  Finds all `available` beds in requested `wardType`.
-        2.  Filters beds matching `equipmentType` (e.g., 'Ventilator').
-        3.  Sorts by priority (e.g., ICU beds for Critical patients).
-        4.  Returns top match + 2 alternatives.
-
-### Step 4: Managing Admissions & Transfers
-**Goal**: Admit patients and manage bed assignments.
-
-*   **Frontend Logic**:
-    *   **Component**: `AdmissionForm.jsx`.
-    *   **Action**: Submits patient data to `POST /api/patients`.
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/patients.js` -> `router.post('/', ...)`
-    *   **Transaction**:
-        1.  Creates `Patient` document.
-        2.  Updates `Bed` status to `occupied`.
-        3.  Links `patient._id` to `Bed` and `bed._id` to `Patient`.
-        4.  Emits `bed:updated` and `patient:admitted` via Socket.IO.
-
-### Step 5: Alerts & Threshold Warnings
-**Goal**: Notify manager of critical states.
-
-*   **Backend Logic**:
-    *   **Service**: `services/alertService.js` -> `checkOccupancyThreshold()`.
-    *   **Trigger**: Called after every bed status update (`bed:updated`).
-    *   **Logic**:
-        *   Calculate `occupancyRate = (occupied / total) * 100`.
-        *   If `occupancyRate > 90`, create `Alert` document.
-        *   Emit `alert:occupancy` socket event.
-*   **Frontend Logic**:
-    *   **Component**: `AlertBanner.jsx` / `ToastContainer`.
-    *   **Action**: Displays red banner/toast when `alert:occupancy` event is received. Plays sound cue.
-
-### Step 6: Forecasting
-**Goal**: Predict future bed load.
-
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/forecasting.js` -> `router.get('/ward/:wardId', ...)`
-    *   **Service**: `services/forecastingService.js` -> `predictAvailability()`.
-    *   **Logic**:
-        *   `Current Available` + `Expected Discharges (next N hours)` - `Scheduled Surgeries`.
-        *   Returns `predictedAvailability` count.
-
-### Step 7: Summary Reports
-**Goal**: Auto-generate plain-English summary.
-
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/reports.js` -> `router.get('/summary', ...)`
-    *   **Logic**:
-        *   Fetches counts for ICU.
-        *   Finds next patient with `expectedDischargeDate`.
-        *   Constructs string: `"As of {time}, ICU occupancy is {X}%. {Y} beds cleaning..."`.
+### 1.2 Scope
+*   **User Management**: Role-based access for Admins, Managers, and Staff.
+*   **Bed Management**: Real-time tracking of bed status (Available, Occupied, Cleaning, Maintenance).
+*   **Patient Management**: Admission, discharge, and transfer workflows.
+*   **Emergency Response**: Rapid bed allocation for critical patients.
+*   **Reporting**: Utilization analytics and forecasting.
 
 ---
 
-## 2️⃣ WARD / UNIT STAFF — “The Ground Operators”
+## 2. System Architecture
 
-### Step 1: Login (Restricted Role)
-*   **Logic**: Login flow same as Manager, but JWT contains `role: 'WARD_STAFF'`.
-*   **Middleware**: `staff-backend/middleware/roleAuth.js` restricts access to specific routes (e.g., blocks `DELETE /api/patients`).
+The system follows a **Microservices-inspired Monolithic Architecture** (Modular Monolith) with separate frontend and backend services for distinct operational domains (IT Admin vs. Hospital Staff).
 
-### Step 2: Update Bed Statuses
-**Goal**: Mark beds as Cleaning/Available.
-
-*   **Frontend Logic**:
-    *   **Component**: `BedCard.jsx`.
-    *   **Action**: User selects status from dropdown -> `PATCH /api/beds/:id`.
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/beds.js` -> `router.patch('/:id', ...)`
-    *   **Validation**: Checks if `status === 'available'` and `currentPatient` exists (prevents accidental release).
-    *   **Update**: Sets `bed.status` and `bed.estimatedAvailableTime` (if cleaning).
-    *   **Broadcast**: Emits `bed:updated` to sync all dashboards.
-
-### Step 3: Respond to Alerts (Cleaning)
-*   **Backend Logic**:
-    *   **Cron Job**: `staff-backend/services/cronJobs.js`.
-    *   **Logic**: Checks beds with `status: 'cleaning'` where `lastUpdated > 1 hour`.
-    *   **Action**: Emits `alert:cleaning_overdue`.
-
----
-
-## 3️⃣ ER STAFF — “The First Responders”
-
-### Step 1 & 2: Emergency Patient & Bed Request
-**Goal**: Find bed for critical patient.
-
-*   **Frontend Logic**:
-    *   **Component**: `EmergencyAdmit.jsx`.
-    *   **Action**: User inputs priority/equipment -> calls `POST /api/beds/recommend`.
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/beds.js` -> `router.post('/recommend', ...)`
-    *   **Logic**: (Same as ICU Manager Step 3). Returns best match.
-
-### Step 3: ER Confirms Transfer
-**Goal**: Reserve bed.
-
-*   **Frontend Logic**:
-    *   **Action**: User clicks "Admit" on recommended bed.
-    *   **API**: Calls `POST /api/patients` with `priority: 'critical'`.
-*   **Backend Logic**:
-    *   **Logic**: Immediately marks bed `occupied`.
-    *   **Alert**: Emits `patient:admitted` with `ward: 'ICU'`, triggering notification for ICU Manager.
-
----
-
-## 4️⃣ HOSPITAL ADMINISTRATION — “The Strategists”
-
-### Step 1: Admin Login
-*   **System**: IT Admin Portal (`it-admin-frontend`).
-*   **Backend**: `it-admin-backend/routes/auth.js`.
-*   **Role**: `IT_ADMIN` or `HOSPITAL_ADMIN`.
-
-### Step 2: Review Utilization Reports
-**Goal**: View historical trends.
-
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/reports.js` -> `router.get('/utilization', ...)`
-    *   **Logic**:
-        *   Iterates all wards.
-        *   Calculates `avgOccupancyPercentage`, `turnoverRate`, `totalAdmissions`.
-        *   Returns JSON for charts.
-*   **Frontend Logic**:
-    *   **Component**: `AnalyticsDashboard.jsx` (using `Recharts`).
-    *   **Visuals**: Bar charts for occupancy, Pie charts for patient distribution.
-
-### Step 3: Review Forecasts
-**Goal**: Plan for future demand.
-
-*   **Backend Logic**:
-    *   **Route**: `staff-backend/routes/forecasting.js` -> `router.get('/events', ...)`
-    *   **Logic**: Returns list of `expectedDischarges` and `scheduledSurgeries` for next 12/24h.
-
-### Step 5: System Configuration
-**Goal**: Configure thresholds (Conceptual/Future).
-
-*   **Implementation**: Currently defined in `staff-backend/config/constants.js` or `.env`.
-*   **Logic**: Admin API would update these values in database `Config` collection (future enhancement).
-
----
-
-## 📊 Data Flow Diagram (Bed Allocation)
+### 2.1 High-Level Architecture Diagram
 
 ```mermaid
-sequenceDiagram
-    participant ER as ER Staff (Frontend)
-    participant API as Staff Backend
-    participant DB as MongoDB
-    participant ICU as ICU Manager (Frontend)
+graph TD
+    subgraph "Client Layer"
+        IT_FE[IT Admin Frontend<br/>(React + Vite)]
+        Staff_FE[Staff Frontend<br/>(React + Vite)]
+    end
 
-    ER->>API: POST /api/beds/recommend (Criteria)
-    API->>DB: Query Available Beds + Filter
-    DB-->>API: Return Best Match
-    API-->>ER: JSON { recommendedBed }
-    
-    ER->>API: POST /api/patients (Admit Patient)
-    API->>DB: Create Patient, Update Bed Status
-    API->>ICU: Socket Emit 'bed:updated'
-    ICU->>ICU: Update Dashboard UI (Red Tile)
+    subgraph "API Gateway / Load Balancer"
+        NGINX[Nginx / Reverse Proxy]
+    end
+
+    subgraph "Application Layer"
+        IT_BE[IT Admin Backend<br/>(Node.js + Express)]
+        Staff_BE[Staff Backend<br/>(Node.js + Express)]
+    end
+
+    subgraph "Data Layer"
+        DB[(MongoDB Cluster)]
+    end
+
+    subgraph "Real-Time Layer"
+        Socket[Socket.IO Server]
+    end
+
+    IT_FE -->|HTTP/REST| IT_BE
+    Staff_FE -->|HTTP/REST| Staff_BE
+    Staff_FE <-->|WebSocket| Socket
+    Staff_BE -->|Events| Socket
+    IT_BE -->|Mongoose| DB
+    Staff_BE -->|Mongoose| DB
 ```
+
+---
+
+## 3. Technology Stack
+
+| Component | Technology | Description |
+| :--- | :--- | :--- |
+| **Frontend** | React.js (Vite) | SPA with functional components and hooks. |
+| **Styling** | Tailwind CSS / CSS | Responsive and modern UI design. |
+| **State Mgmt** | React Context API | Managing auth state and socket connections. |
+| **Backend** | Node.js + Express | RESTful API services. |
+| **Database** | MongoDB | NoSQL database for flexible schema design. |
+| **Real-Time** | Socket.IO | Bi-directional communication for live updates. |
+| **Auth** | JWT (JSON Web Tokens) | Stateless authentication. |
+| **Security** | bcryptjs | Password hashing. |
+
+---
+
+## 4. Database Design
+
+The database is normalized to support data integrity while leveraging MongoDB's document model for performance.
+
+### 4.1 Entity-Relationship (ER) Diagram
+
+```mermaid
+erDiagram
+    User ||--o{ BedRequest : "requests"
+    User ||--o{ EmergencyRequest : "requests"
+    Patient ||--o{ Bed : "occupies"
+    Patient ||--o{ BedRequest : "subject_of"
+    Ward ||--o{ Bed : "contains"
+    
+    User {
+        ObjectId _id
+        String name
+        String email
+        String password
+        String role
+        String department
+    }
+
+    Patient {
+        ObjectId _id
+        String name
+        Number age
+        String gender
+        String priority
+        String status
+        ObjectId assignedBed
+    }
+
+    Bed {
+        ObjectId _id
+        String bedNumber
+        ObjectId ward
+        String status
+        ObjectId currentPatient
+        String equipmentType
+    }
+
+    Ward {
+        ObjectId _id
+        String name
+        String type
+        Number capacity
+    }
+
+    BedRequest {
+        ObjectId _id
+        ObjectId patientId
+        ObjectId requestedBy
+        String wardType
+        String status
+        ObjectId assignedBedId
+    }
+```
+
+### 4.2 Key Collections
+
+*   **Users**: Stores staff credentials and roles (`HOSPITAL_ADMIN`, `ICU_MANAGER`, `WARD_STAFF`, `ER_STAFF`).
+*   **Patients**: Stores patient demographics, medical priority, and admission status.
+*   **Beds**: Tracks bed availability, type, and current occupant.
+*   **Wards**: logical grouping of beds (ICU, General, Emergency).
+*   **BedRequests**: Formal requests for bed allocation (Standard workflow).
+*   **EmergencyRequests**: High-priority requests for immediate allocation.
+
+---
+
+## 5. Component Design
+
+### 5.1 IT Admin Service (`it-admin-backend`)
+*   **Responsibility**: System configuration and user management.
+*   **Key Modules**:
+    *   `AuthModule`: Admin login.
+    *   `UserModule`: CRUD operations for hospital staff accounts.
+
+### 5.2 Staff Service (`staff-backend`)
+*   **Responsibility**: Core hospital operations.
+*   **Key Modules**:
+    *   `AuthModule`: Staff login.
+    *   `BedModule`: Bed CRUD, status updates, recommendation algorithm.
+    *   `PatientModule`: Admission, discharge, patient details.
+    *   `RequestModule`: Handling standard and emergency bed requests.
+    *   `ReportingModule`: Generating occupancy and utilization reports.
+
+---
+
+## 6. Key Workflows & API Design
+
+### 6.1 Emergency Bed Admission Flow
+
+1.  **ER Staff** initiates request via Frontend.
+2.  **Frontend** calls `POST /api/emergency-requests`.
+3.  **Backend** checks `isEmergencyMode`.
+    *   If `true`: Auto-assigns first available bed in ER/ICU.
+    *   If `false`: Creates a pending request for Admin approval.
+4.  **Backend** emits `emergency:new` or `patient:admitted` via Socket.IO.
+5.  **Dashboards** update in real-time.
+
+### 6.2 Bed Cleaning Workflow
+
+1.  **Nurse** marks bed as "Cleaning" via `PATCH /api/beds/:id`.
+2.  **Backend** updates status and sets `lastUpdated` timestamp.
+3.  **Cron Job** runs every 15 mins to check for beds in "Cleaning" > 1 hour.
+4.  **System** triggers alert if cleaning is overdue.
+
+### 6.3 API Endpoints Summary
+
+| Method | Endpoint | Description | Access |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/auth/login` | Authenticate user | Public |
+| `GET` | `/api/beds` | Get all beds | Auth |
+| `PATCH` | `/api/beds/:id` | Update bed status | Staff |
+| `POST` | `/api/patients` | Admit new patient | Staff |
+| `POST` | `/api/emergency-requests` | Create emergency request | ER Staff |
+| `PATCH` | `/api/bed-requests/:id/approve` | Approve bed request | Admin |
+| `GET` | `/api/reports/utilization` | Get utilization stats | Admin/Manager |
+
+---
+
+## 7. Security Architecture
+
+### 7.1 Authentication
+*   **Mechanism**: JWT (JSON Web Tokens).
+*   **Flow**: User logs in -> Server verifies credentials -> Server issues signed JWT -> Client sends JWT in `Authorization: Bearer` header.
+
+### 7.2 Role-Based Access Control (RBAC)
+
+| Role | Permissions |
+| :--- | :--- |
+| **IT_ADMIN** | Manage system users (Create/Delete Staff accounts). |
+| **HOSPITAL_ADMIN** | View all data, Approve/Reject requests, View Reports. |
+| **ICU_MANAGER** | Manage ICU beds, View Dashboard, Request beds. |
+| **WARD_STAFF** | Update bed status (Cleaning/Available), View Ward data. |
+| **ER_STAFF** | Create Emergency Requests, View ER availability. |
+
+---
+
+## 8. Real-Time Communication
+
+The system uses **Socket.IO** to push updates to connected clients, eliminating the need for manual page refreshes.
+
+### 8.1 Events
+
+*   `bed:updated`: Fired when a bed's status changes (e.g., Available -> Occupied).
+*   `patient:admitted`: Fired when a new patient is admitted.
+*   `patient:discharged`: Fired when a patient is discharged.
+*   `emergency:new`: Fired when a new emergency request is created.
+*   `bed-request-approved`: Fired when an admin approves a request.
+
+---
+
+## 9. Deployment & Infrastructure
+
+*   **Environment**: Node.js Runtime.
+*   **Process Management**: PM2 or Docker Containers.
+*   **Reverse Proxy**: Nginx (handling SSL termination and routing).
+*   **Database**: MongoDB Atlas (Cloud) or Self-Hosted Cluster.
+*   **CI/CD**: GitHub Actions (Conceptual) for automated testing and deployment.
