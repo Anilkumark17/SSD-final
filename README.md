@@ -1,408 +1,229 @@
-# 🏥 BedManager - Hospital Bed & ICU Occupancy Management System
+# 🏥 Hospital Management System (HMS)
 
 ## Overview
 
-BedManager is a real-time hospital bed and ICU occupancy dashboard designed for large city hospitals. It enables hospital administrators, ICU managers, and ward staff to monitor occupancy across wards, track bed availability in real-time, manage patient transfers, and forecast capacity needs.
+The Hospital Management System (HMS) is a comprehensive, dual-module platform designed to streamline hospital operations. It consists of two distinct but integrated systems:
+
+1.  **BedManager (Staff System)**: A real-time bed and patient management dashboard for hospital staff (ICU Managers, Nurses, ER Staff).
+2.  **IT Admin System**: A centralized employee management and forecasting portal for IT Administrators and Hospital Executives.
+
+This solution ensures efficient resource allocation, real-time communication between departments, and data-driven decision-making for hospital capacity planning.
+
+---
+
+## 🏗️ System Architecture
+
+The project is divided into four main components:
+
+| Component | Directory | Port | Description |
+| :--- | :--- | :--- | :--- |
+| **Staff Frontend** | `staff-frontend` | `5173` | React-based dashboard for bed/patient management |
+| **Staff Backend** | `staff-backend` | `5000` | Node/Express API with Socket.IO for real-time updates |
+| **IT Admin Frontend** | `it-admin-frontend` | `5174` | React-based portal for employee management & forecasting |
+| **IT Admin Backend** | `it-admin-backend` | `5001` | Node/Express API for user auth and admin functions |
 
 ---
 
 ## 🎯 Key Features
 
-### Real-Time Bed Management
-- **Live Occupancy Tracking**: Monitor bed status across ICU, ER, and General Wards
-- **Visual Bed Grid**: 10-column grid layout showing 75 beds (15 ICU, 20 ER, 40 General Ward)
-- **Color-Coded Status**: Green (Available), Light Red (Occupied), Orange (Cleaning), Blue (Reserved), Gray (Maintenance)
-- **Instant Updates**: Socket.IO for real-time bed status changes
+### 1. BedManager (Staff System)
 
-### Patient Management
-- **Quick Admission**: Add patients with auto-generated 5-character IDs
-- **Bed Assignment**: Assign patients to specific beds with ward selection
-- **Bed Recommendations**: System suggests optimal beds based on priority and equipment
-- **Discharge Flow**: Automatic bed status update to 'cleaning' upon discharge
+#### **Real-Time Bed Management**
+*   **Live Occupancy Tracking**: Monitor bed status across ICU, ER, and General Wards.
+*   **Visual Bed Grid**: Interactive grid showing bed status with color-coded indicators.
+*   **Status Types**:
+    *   🟢 **Available**: Ready for new patient.
+    *   🔴 **Occupied**: Currently in use.
+    *   🟠 **Cleaning**: Housekeeping in progress.
+    *   🔵 **Reserved**: Booked for incoming patient.
+    *   ⚪ **Maintenance**: Out of service.
+*   **Instant Updates**: Powered by Socket.IO, changes reflect immediately across all connected devices.
 
-### Dashboard Analytics
-- **Occupancy Metrics**: Total patients, pending requests, unread alerts
-- **Ward Statistics**: Real-time counts of occupied/available/cleaning/reserved beds
-- **Visual Charts**: Bar charts for occupancy trends, pie charts for bed distribution
-- **Upcoming Discharges**: View patients scheduled for discharge in next 24 hours
+#### **Patient Management**
+*   **Admission Workflow**: Streamlined form for admitting patients from ER or direct entry.
+*   **Smart Bed Recommendations**: Algorithm suggests optimal beds based on patient priority (Critical, High, Medium, Low) and required equipment (Ventilator, Oxygen, etc.).
+*   **Discharge Process**: Automated workflow that transitions bed status to 'Cleaning' upon patient discharge.
+
+#### **Dashboard Analytics**
+*   **Operational Metrics**: Real-time counters for total patients, available beds, and pending requests.
+*   **Visual Reports**: Charts displaying occupancy trends and ward-wise distribution.
+*   **Alerts System**: Notifications for critical occupancy levels (>90%) and new admissions.
+
+### 2. IT Admin System
+
+#### **Employee Management**
+*   **User CRUD**: Create, Read, Update, and Delete hospital staff accounts.
+*   **Role-Based Access Control (RBAC)**: Assign specific roles to users:
+    *   `HOSPITAL_ADMIN`
+    *   `ICU_MANAGER`
+    *   `ER_STAFF`
+    *   `WARD_STAFF`
+*   **Status Control**: Activate or deactivate user accounts instantly.
+
+#### **Forecasting & Analytics**
+*   **Capacity Planning**: Tools to predict future bed requirements based on historical data.
+*   **Staffing Optimization**: Insights to help align staff schedules with peak occupancy times.
 
 ---
 
 ## 👥 User Roles & Permissions
 
-### ICU Manager (e.g., Anuradha)
-**Responsibilities:**
-- Monitor ICU occupancy in real-time
-- Allocate beds to critical patients
-- Approve bed requests from ER
-- Review capacity forecasts
+### Staff System Roles
 
-**Permissions:**
-- ✅ View all beds and patients
-- ✅ Assign patients to beds
-- ✅ Discharge patients
-- ✅ Update bed status
-- ✅ View dashboard analytics
+| Role | Responsibilities | Key Permissions |
+| :--- | :--- | :--- |
+| **ICU Manager** | Manage ICU operations, critical decisions | ✅ Discharge patients<br>✅ Override bed status<br>✅ View all analytics |
+| **ER Staff** | Emergency admissions, triage | ✅ Request beds<br>✅ Admit patients<br>✅ View available beds |
+| **Ward Staff** | Daily care, housekeeping updates | ✅ Mark beds 'Cleaning'/'Available'<br>✅ View assigned patients<br>❌ Cannot discharge |
+| **Hospital Admin** | High-level oversight | ✅ View all reports<br>✅ Access all wards<br>✅ Generate summaries |
 
-### Ward/Unit Staff
-**Responsibilities:**
-- Update bed statuses after cleaning
-- Mark beds as maintenance when needed
-- Report bed availability
+### IT Admin System Roles
 
-**Permissions:**
-- ✅ View beds in their ward
-- ✅ Update bed status (available, cleaning, maintenance)
-- ✅ View assigned patients
-- ❌ Discharge patients (requires manager approval)
-
-### ER Staff
-**Responsibilities:**
-- Request beds for emergency admissions
-- View available beds across all wards
-- Admit patients to available beds
-
-**Permissions:**
-- ✅ View all available beds
-- ✅ Create bed requests
-- ✅ Admit emergency patients
-- ✅ View ER bed status
-
-### Hospital Administration
-**Responsibilities:**
-- Review utilization reports
-- Plan capacity based on trends
-- Monitor overall hospital occupancy
-
-**Permissions:**
-- ✅ View all dashboard analytics
-- ✅ Generate reports
-- ✅ View historical data
-- ✅ Access all wards
-
-### Medical Staff (Doctors/Nurses)
-**Responsibilities:**
-- View patient bed assignments
-- Request bed transfers
-- Update patient information
-
-**Permissions:**
-- ✅ View patients and bed assignments
-- ✅ Update patient status
-- ❌ Update bed status directly
-
----
-
-## 🗄️ Database Structure
-
-### Ward Model
-```javascript
-{
-  name: String (e.g., "ICU"),
-  type: String (enum: ['ICU', 'ER', 'General Ward']),
-  capacity: Number (15, 20, or 40),
-  floor: Number,
-  equipment: [String]
-}
-```
-
-### Bed Model
-```javascript
-{
-  bedNumber: String (e.g., "ICU-001"),
-  ward: ObjectId (ref: 'Ward'),
-  floor: Number,
-  status: String (enum: ['available', 'occupied', 'cleaning', 'reserved', 'maintenance']),
-  equipmentType: [String],
-  currentPatient: ObjectId (ref: 'Patient'),
-  estimatedAvailableTime: Date,
-  lastUpdated: Date
-}
-```
-
-### Patient Model
-```javascript
-{
-  patientId: String (auto-generated 5-char alphanumeric),
-  name: String,
-  age: Number,
-  gender: String,
-  department: String,
-  reasonForAdmission: String,
-  priority: String (enum: ['low', 'medium', 'high', 'critical']),
-  status: String (enum: ['admitted', 'discharged', 'transferred']),
-  assignedBed: ObjectId (ref: 'Bed'),
-  admittedAt: Date,
-  dischargedAt: Date
-}
-```
+| Role | Responsibilities | Key Permissions |
+| :--- | :--- | :--- |
+| **IT Admin** | System maintenance, user management | ✅ Create/Edit/Delete Employees<br>✅ Reset passwords<br>✅ Manage system config |
 
 ---
 
 ## 🚀 Setup Instructions
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- MongoDB (v5 or higher)
-- npm or yarn
+*   Node.js (v16+)
+*   MongoDB (v5+)
+*   npm or yarn
 
-### Backend Setup (staff-backend)
+### 1. Database Setup
+Ensure your local MongoDB instance is running.
+```bash
+# Default connection string used in apps:
+mongodb://localhost:27017/hospital-system
+```
+
+### 2. Staff System Setup
+
+**Backend (`staff-backend`)**
 ```bash
 cd staff-backend
-
-# Install dependencies
 npm install
-
-# Create .env file
 cp .env.example .env
-# Edit .env and add:
-# MONGODB_URI=mongodb://localhost:27017/hospital-system
-# JWT_SECRET=your_jwt_secret_here
-# PORT=5000
+# Configure .env: PORT=5000, MONGODB_URI=..., JWT_SECRET=...
 
-# Seed the database
-node seeders/seedData.js
+# Seed initial data (Beds, Wards, Users)
+npm run seed
 
-# Start the server
+# Start server
 npm run dev
 ```
 
-### Frontend Setup (staff-frontend)
+**Frontend (`staff-frontend`)**
 ```bash
 cd staff-frontend
-
-# Install dependencies
 npm install
+# Start development server
+npm run dev
+# Access at http://localhost:5173
+```
 
-# Create .env file (if needed)
-# VITE_API_URL=http://localhost:5000
+### 3. IT Admin System Setup
 
-# Start the development server
+**Backend (`it-admin-backend`)**
+```bash
+cd it-admin-backend
+npm install
+cp .env.example .env
+# Configure .env: PORT=5001, MONGODB_URI=..., JWT_SECRET=...
+# Set Admin Credentials in .env:
+# ADMIN_EMAIL=admin@hospital.com
+# ADMIN_PASSWORD=secure_password
+
+# Start server
 npm run dev
 ```
 
-### Access the Application
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:5000
-
----
-
-## 🔐 Login Credentials (Seeded Data)
-
-| Name | Email | Password | Role |
-|------|-------|----------|------|
-| Anuradha Manager | anuradha@hospital.com | password123 | ICU_MANAGER |
-| John Nurse | nurse@hospital.com | password123 | Nurse |
-| Dr. Smith | doctor@hospital.com | password123 | Doctor |
-| ER Staff | er@hospital.com | password123 | ER_STAFF |
-
----
-
-##  📊 System Workflows
-
-### Workflow 1: Admitting a Patient
-
-1. **ER Staff logs in** → Navigates to Dashboard
-2. **Clicks on available bed** (green) in appropriate ward
-3. **Clicks "Assign Patient to This Bed"**
-4. **Fills patient form:**
-   - Name, Age, Gender
-   - Reason for admission
-   - Priority level
-   - Ward type (auto-filled based on bed)
-   - Bed number (auto-filled)
-5. **Submits form**
-6. **System automatically:**
-   - Creates patient with unique ID
-   - Updates bed status to 'occupied'
-   - Links patient to bed
-   - Broadcasts real-time update to all connected users
-
-### Workflow 2: Discharging a Patient
-
-1. **ICU Manager logs in** → Navigates to Beds page
-2. **Clicks on occupied bed** (light red)
-3. **Views patient information** in modal
-4. **Clicks "Discharge Patient"**
-5. **Confirms discharge**
-6. **System automatically:**
-   - Updates patient status to 'discharged'
-   - Sets bed status to 'cleaning'
-   - Clears currentPatient from bed
-   - Broadcasts update
-
-### Workflow 3: Updating Bed Status
-
-1. **Ward Staff logs in** → Navigates to Beds page
-2. **Clicks on bed** needing status update
-3. **Uses "Update Bed Status" dropdown:**
-   - Available (after cleaning complete)
-   - Cleaning (after discharge)
-   - Maintenance (if equipment issues)
-   - Reserved (for expected admission)
-4. **System updates status** and broadcasts to all users
-
-### Workflow 4: Emergency Admission
-
-1. **ER receives critical patient**
-2. **ER Staff checks Dashboard** for available ICU beds
-3. **System shows:** "ICU: 2 available, 13 occupied"
-4. **ER Staff clicks available ICU bed**
-5. **Fills emergency admission form** with critical priority
-6. **Bed immediately assigned** and visible to ICU Manager
-
----
-
-## 🔌 API Endpoints
-
-### Authentication
-- `POST /api/auth/login` - Login staff user
-- `GET /api/auth/me` - Get current user
-- `POST /api/auth/logout` - Logout user
-
-### Beds
-- `GET /api/beds` - Get all beds (supports filters: ward, status)
-- `GET /api/beds/available` - Get available beds
-- `POST /api/beds/recommend` - Get recommended beds
-- `PATCH /api/beds/:id` - Update bed status
-
-### Patients
-- `GET /api/patients` - Get all patients
-- `POST /api/patients` - Admit new patient
-- `POST /api/patients/:id/discharge` - Discharge patient
-
-### Dashboard
-- `GET /api/dashboard/overview` - Get dashboard statistics
-- `GET /api/dashboard/summary` - Get plain-English ward summaries
-
-### Alerts
-- `GET /api/alerts` - Get alerts (supports filter: isRead)
-- `PATCH /api/alerts/:id/read` - Mark alert as read
-
----
-
-## 🔄 Real-Time Events (Socket.IO)
-
-### Events Emitted by Server
-- `bed:updated` - When bed status changes
-- `patient:admitted` - When new patient admitted
-- `patient:discharged` - When patient discharged
-- `alert:created` - When new alert created
-- `alert:occupancy` - Critical occupancy alert (>90%)
-
-### Client Listeners
-Frontend automatically refreshes data when receiving these events
-
----
-
-## 📈 Bed Status Flow
-
-```
-┌─────────────┐
-│  Available  │ ◄───────────────┐
-└──────┬──────┘                 │
-       │                        │
-       │ Patient Assigned    Staff Marks
-       │                     as Available
-       ▼                        │
-┌─────────────┐                 │
-│  Occupied   │                 │
-└──────┬──────┘                 │
-       │                        │
-       │ Patient Discharged     │
-       │                        │
-       ▼                        │
-┌─────────────┐                 │
-│  Cleaning   │ ────────────────┘
-└──────┬──────┘
-       │
-       │ Equipment Issue
-       ▼
-┌─────────────┐
-│ Maintenance │ ◄──► Reserved
-└─────────────┘
+**Frontend (`it-admin-frontend`)**
+```bash
+cd it-admin-frontend
+npm install
+# Start development server
+npm run dev
+# Access at http://localhost:5174
 ```
 
 ---
 
-## 🎨 Color Coding System
+## 🔐 Default Credentials (Seeded Data)
 
-| Status | Color | Hex Code | Icon |
-|--------|-------|----------|------|
-| Available | Green | #22c55e | 🛏️ |
-| Occupied | Light Red | #fca5a5 | 🚪 |
-| Cleaning | Orange | #f59e0b | 🧹 |
-| Reserved | Blue | #3b82f6 | 🔒 |
-| Maintenance | Gray | #6b7280 | ⚙️ |
+### Staff System
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **ICU Manager** | `anuradha@hospital.com` | `password123` |
+| **Nurse** | `nurse@hospital.com` | `password123` |
+| **Doctor** | `doctor@hospital.com` | `password123` |
+| **ER Staff** | `er@hospital.com` | `password123` |
+
+### IT Admin System
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **IT Admin** | *(Check .env file)* | *(Check .env file)* |
+
+---
+
+## 🔌 API Documentation
+
+### Staff Backend API (`http://localhost:5000`)
+
+#### **Auth**
+*   `POST /api/auth/login`: Authenticate staff user.
+*   `GET /api/auth/me`: Get current user profile.
+
+#### **Beds**
+*   `GET /api/beds`: List all beds (filters: ward, status).
+*   `POST /api/beds/recommend`: Get bed recommendations for patient.
+*   `PATCH /api/beds/:id`: Update bed status (e.g., to 'Maintenance').
+
+#### **Patients**
+*   `POST /api/patients`: Admit a new patient.
+*   `POST /api/patients/:id/discharge`: Discharge a patient.
+*   `GET /api/patients`: List all active patients.
+
+### IT Admin Backend API (`http://localhost:5001`)
+
+#### **Auth**
+*   `POST /api/auth/login`: Admin login.
+
+#### **Users (Employees)**
+*   `GET /api/users`: List all hospital staff.
+*   `POST /api/users`: Create a new staff account.
+*   `PATCH /api/users/:id`: Update staff details/roles.
+*   `DELETE /api/users/:id`: Remove a staff account.
 
 ---
 
 ## 🛠️ Technology Stack
 
 ### Frontend
-- React 18
-- Vite
-- Socket.IO Client
-- Recharts (for analytics)
-- Lucide React (icons)
-- React Toastify (notifications)
-- Axios (HTTP client)
+*   **Framework**: React 18 (Vite)
+*   **Styling**: Tailwind CSS, Lucide React (Icons)
+*   **State/Data**: Axios, React Context API
+*   **Real-time**: Socket.IO Client
+*   **Visualization**: Recharts
 
 ### Backend
-- Node.js
-- Express
-- MongoDB with Mongoose
-- Socket.IO
-- JWT (authentication)
-- bcryptjs (password hashing)
-
----
-
-## 📝 Future Enhancements
-
-- [ ] Mobile app for on-the-go bed management
-- [ ] Integration with hospital EHR systems
-- [ ] Predictive analytics for bed availability
-- [ ] Automated bed allocation based on AI
-- [ ] Multi-hospital support
-- [ ] Advanced reporting and export features
+*   **Runtime**: Node.js
+*   **Framework**: Express.js
+*   **Database**: MongoDB (Mongoose ODM)
+*   **Real-time**: Socket.IO
+*   **Security**: JWT Auth, BCrypt, CORS, Cookie Parser
 
 ---
 
 ## 👨‍💻 Development Team
 
-**Point of Contact:** Sai Anirudh Karre (saianirudh.karre@iiit.ac.in)
-
-**Team Size:** 5
+*   **Sai Anirudh Karre** - *Lead Developer*
+*   **Team Size**: 5 Members
 
 ---
 
 ## 📄 License
 
-This project is developed for hospital management purposes.
-
----
-
-## 🆘 Support & Troubleshooting
-
-### Common Issues
-
-**Q: Login shows "Invalid credentials"**
-A: Ensure you've run the seed script (`node seeders/seedData.js`)
-
-**Q: Beds showing as 0**
-A: Database might not be seeded. Run seed script and refresh.
-
-**Q: Real-time updates not working**
-A: Check that Socket.IO is connected (see browser console)
-
-**Q: Cannot discharge patient**
-A: Ensure you're logged in as ICU Manager or have appropriate role
-
----
-
-## 📞 Contact
-
-For questions, issues, or feature requests, contact:
-- Email: saianirudh.karre@iiit.ac.in
-- Project: BedManager - Hospital Bed Management System
+This project is proprietary software developed for hospital management purposes.

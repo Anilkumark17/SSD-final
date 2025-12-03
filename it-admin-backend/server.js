@@ -1,4 +1,9 @@
-require('dotenv').config();
+require('dotenv').config({ path: './.env' });
+console.log('Server starting...');
+console.log('Env Check:', { 
+  MONGO_URI: process.env.MONGODB_URI ? 'Defined' : 'Undefined',
+  NODE_ENV: process.env.NODE_ENV 
+});
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -8,7 +13,7 @@ const connectDB = require('./config/db');
 const app = express();
 
 // Connect to database
-connectDB();
+// connectDB(); // Removing this non-awaited call
 
 // Middleware
 app.use(cors({
@@ -52,7 +57,17 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`🚀 IT Admin Backend running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`🚀 IT Admin Backend running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();

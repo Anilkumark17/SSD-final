@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: './.env' });
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -23,7 +23,7 @@ const io = new Server(server, {
 app.set('io', io);
 
 // Connect to database
-connectDB();
+// connectDB(); // Removing this non-awaited call
 
 // Middleware
 app.use(cors({
@@ -87,8 +87,18 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 5001;
 
-server.listen(PORT, () => {
-  console.log(`🚀 Staff Backend running on port ${PORT}`);
-  console.log(`📡 Socket.IO initialized`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV}`);
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+    server.listen(PORT, () => {
+      console.log(`🚀 Staff Backend running on port ${PORT}`);
+      console.log(`📡 Socket.IO initialized`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
