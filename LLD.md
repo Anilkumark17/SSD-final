@@ -24,8 +24,8 @@ The system follows a **Microservices-inspired Monolithic Architecture** (Modular
 ```mermaid
 graph TD
     subgraph "Client Layer"
-        IT_FE[IT Admin Frontend<br/>(React + Vite)]
-        Staff_FE[Staff Frontend<br/>(React + Vite)]
+        IT_FE["IT Admin Frontend<br/>(React + Vite)"]
+        Staff_FE["Staff Frontend<br/>(React + Vite)"]
     end
 
     subgraph "API Gateway / Load Balancer"
@@ -33,8 +33,8 @@ graph TD
     end
 
     subgraph "Application Layer"
-        IT_BE[IT Admin Backend<br/>(Node.js + Express)]
-        Staff_BE[Staff Backend<br/>(Node.js + Express)]
+        IT_BE["IT Admin Backend<br/>(Node.js + Express)"]
+        Staff_BE["Staff Backend<br/>(Node.js + Express)"]
     end
 
     subgraph "Data Layer"
