@@ -1,6 +1,8 @@
 const express = require('express');
 const EmergencyRequest = require('../models/EmergencyRequest');
 const Bed = require('../models/Bed');
+const Patient = require('../models/Patient');
+const Ward = require('../models/Ward');
 const { protect } = require('../middleware/auth');
 const { checkRole } = require('../middleware/roleAuth');
 const { recommendBed } = require('../utils/bedRecommendation');
@@ -59,7 +61,6 @@ router.post('/', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADMIN']), async (req,
 
     // Handle Emergency Mode (Instant Admission)
     if (isEmergencyMode && finalBedId) {
-      const Patient = require('../models/Patient');
       const newPatient = await Patient.create({
         name: patientName,
         age: age || 0,
@@ -72,7 +73,6 @@ router.post('/', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADMIN']), async (req,
         admittedAt: Date.now()
       });
 
-      const Bed = require('../models/Bed');
       const bed = await Bed.findByIdAndUpdate(finalBedId, {
         status: 'occupied',
         currentPatient: newPatient._id
@@ -146,26 +146,47 @@ router.patch('/:id/approve', protect, checkRole(['HOSPITAL_ADMIN']), async (req,
       return res.status(400).json({ success: false, message: 'Request already processed' });
     }
 
+    // Determine Bed ID
+    // The frontend must send assignedBedId. We can fallback to request.assignedBed if it was already set (e.g. during creation)
+    const { assignedBedId } = req.body;
+    let targetBedId = assignedBedId || request.assignedBed;
+
+    if (!targetBedId) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Please select a bed before approving.' 
+        });
+    }
+
+    // Verify bed availability if it's a new assignment
+    const bedToCheck = await Bed.findById(targetBedId);
+    if (!bedToCheck) {
+        return res.status(404).json({ success: false, message: 'Selected bed not found' });
+    }
+    
+    // If we are assigning a new bed (different from what might have been tentatively assigned), check if it's available
+    if (targetBedId !== request.assignedBed?.toString() && bedToCheck.status !== 'available' && bedToCheck.status !== 'reserved') {
+         return res.status(400).json({ 
+            success: false, 
+            message: `Bed ${bedToCheck.bedNumber} is not available (Status: ${bedToCheck.status})` 
+        });
+    }
+
     // 1. Create Patient Record
-    // Parse details from notes if we stored them there, or just use basic info
-    // For a robust solution, we should have stored them in schema. 
-    // Assuming we can extract or just use defaults + name.
-    const Patient = require('../models/Patient');
     const newPatient = await Patient.create({
       name: request.patientName,
-      age: 0, // Default to 0 as schema requires Number
-      gender: 'Other', // Default to 'Other' as schema requires enum
+      age: request.age || 0, // Use request age if available
+      gender: request.gender || 'Other',
       department: 'ER',
       reasonForAdmission: request.notes || 'Emergency Admission',
       priority: request.urgency || 'critical',
-      assignedBed: request.assignedBed,
+      assignedBed: targetBedId,
       status: 'admitted',
       admittedAt: Date.now()
     });
 
     // 2. Update Bed Status
-    const Bed = require('../models/Bed');
-    const bed = await Bed.findById(request.assignedBed);
+    const bed = await Bed.findById(targetBedId);
     if (bed) {
       bed.status = 'occupied';
       bed.currentPatient = newPatient._id;
@@ -174,6 +195,7 @@ router.patch('/:id/approve', protect, checkRole(['HOSPITAL_ADMIN']), async (req,
 
     // 3. Update Request Status
     request.status = 'assigned'; // or 'approved'
+    request.assignedBed = targetBedId;
     request.resolvedAt = Date.now();
     await request.save();
 
@@ -201,7 +223,7 @@ router.patch('/:id/approve', protect, checkRole(['HOSPITAL_ADMIN']), async (req,
     res.status(200).json({ success: true, request });
   } catch (error) {
     console.error('Approve emergency request error:', error);
-    res.status(500).json({ success: false, message: 'Error approving request' });
+    res.status(500).json({ success: false, message: 'Error approving request: ' + error.message });
   }
 });
 
@@ -305,6 +327,51 @@ router.patch('/:id/cancel', protect, checkRole(['ER_STAFF', 'ICU_MANAGER', 'HOSP
   }
 });
 
+// @route   PATCH /api/emergency-requests/:id/reject
+// @desc    Reject emergency request
+// @access  Private - HOSPITAL_ADMIN
+router.patch('/:id/reject', protect, checkRole(['HOSPITAL_ADMIN']), async (req, res) => {
+  try {
+    const { rejectionReason } = req.body;
+    const request = await EmergencyRequest.findById(req.params.id);
+    
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: 'Request not found'
+      });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'Request already processed'
+      });
+    }
+
+    request.status = 'rejected';
+    request.notes = rejectionReason ? (request.notes ? `${request.notes} | Rejected: ${rejectionReason}` : `Rejected: ${rejectionReason}`) : request.notes;
+    request.resolvedAt = Date.now();
+    await request.save();
+
+    // Emit socket event
+    const io = req.app.get('io');
+    io.emit('emergency:assigned', { requestId: request._id, status: 'rejected' });
+
+    res.status(200).json({
+      success: true,
+      message: 'Request rejected',
+      request
+    });
+  } catch (error) {
+    console.error('Reject emergency request error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error rejecting request'
+    });
+  }
+});
+
 // @route   POST /api/emergency-requests/check-availability
 // @desc    Check for bed availability without creating a request
 // @access  Private - ER_STAFF, HOSPITAL_ADMIN
@@ -317,7 +384,6 @@ router.post('/check-availability', protect, checkRole(['ER_STAFF', 'HOSPITAL_ADM
 
     if (isEmergencyMode) {
       // 1. Get Ward IDs for Emergency and ICU
-      const Ward = require('../models/Ward');
       // Note: Adjust names if your DB uses 'ER' instead of 'Emergency'
       const targetWards = await Ward.find({
         $or: [{ name: 'Emergency' }, { name: 'ER' }, { name: 'ICU' }, { type: 'ICU' }, { type: 'ER' }]

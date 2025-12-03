@@ -31,7 +31,7 @@ const emergencyRequestSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'assigned', 'cancelled'],
+    enum: ['pending', 'assigned', 'cancelled', 'rejected'],
     default: 'pending'
   },
   requestedBy: {

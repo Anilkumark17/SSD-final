@@ -125,46 +125,94 @@ router.patch('/:id/assign', protect, async (req, res) => {
 });
 
 // @route   PATCH /api/bed-requests/:id/approve
-// @desc    Approve bed request (Hospital Admin)
+// @desc    Approve bed request and admit patient
 // @access  Private - HOSPITAL_ADMIN
 router.patch('/:id/approve', protect, async (req, res) => {
   try {
-    // Check role manually since we didn't import checkRole here yet, or assume protect handles it if we add middleware
-    // For now, let's trust the frontend role check or add checkRole if needed. 
-    // Ideally we should use checkRole middleware.
-
     const { assignedBedId } = req.body;
+    const bedRequestId = req.params.id;
 
-    const updateData = { status: 'approved' };
-    if (assignedBedId) {
-      updateData.assignedBedId = assignedBedId;
-      // Also update the bed status to reserved
-      await Bed.findByIdAndUpdate(assignedBedId, { status: 'reserved' });
+    console.log(`✅ Approving request ${bedRequestId} with bed ${assignedBedId}`);
+
+    const bedRequest = await BedRequest.findById(bedRequestId);
+    if (!bedRequest) {
+      return res.status(404).json({ success: false, message: 'Bed request not found' });
     }
 
-    const bedRequest = await BedRequest.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    ).populate('patientId', 'name');
+    // Determine bed ID: use passed ID or fallback to first recommendation
+    let targetBedId = assignedBedId;
+    if (!targetBedId && bedRequest.recommendedBeds && bedRequest.recommendedBeds.length > 0) {
+      targetBedId = bedRequest.recommendedBeds[0];
+    }
 
-    if (!bedRequest) {
-      return res.status(404).json({
-        success: false,
-        message: 'Bed request not found'
+    if (!targetBedId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'No bed assigned. Please select a bed to approve this request.' 
       });
     }
 
-    // Emit socket event for ICU Manager
-    const io = req.app.get('io');
-    io.emit('bed-request-approved', bedRequest);
-    if (assignedBedId) {
-      io.emit('bed:updated', { bedId: assignedBedId, status: 'reserved' });
+    // Check if bed is actually available
+    const bedToCheck = await Bed.findById(targetBedId);
+    if (!bedToCheck) {
+        return res.status(404).json({ success: false, message: 'Selected bed not found' });
     }
+
+    // Allow if it's already assigned to this request (idempotency) or if it's available/reserved
+    // If it's occupied by someone else, reject
+    if (bedToCheck.status === 'occupied' && bedToCheck.currentPatient?.toString() !== bedRequest.patientId?.toString()) {
+        return res.status(400).json({ 
+            success: false, 
+            message: `Bed ${bedToCheck.bedNumber} is already occupied.` 
+        });
+    }
+
+    // 1. Update Bed Request
+    bedRequest.status = 'approved';
+    bedRequest.assignedBedId = targetBedId;
+    bedRequest.fulfilledDate = Date.now();
+    await bedRequest.save();
+
+    // 2. Update Bed Status to Occupied
+    const bed = await Bed.findById(targetBedId);
+    if (bed) {
+      bed.status = 'occupied';
+      bed.currentPatient = bedRequest.patientId;
+      await bed.save();
+    }
+
+    // 3. Update Patient Status
+    const Patient = require('../models/Patient');
+    await Patient.findByIdAndUpdate(bedRequest.patientId, {
+      status: 'admitted',
+      assignedBed: targetBedId,
+      admittedAt: Date.now()
+    });
+
+    // Emit socket events
+    const io = req.app.get('io');
+    
+    // Notify ICU Manager / Staff
+    io.emit('bed-request-approved', bedRequest);
+    
+    // Update Bed Grid instantly
+    io.emit('bed:updated', { 
+      bedId: targetBedId, 
+      status: 'occupied',
+      ward: bed.ward 
+    });
+
+    // Notify that patient is admitted
+    io.emit('patient:admitted', {
+      patientId: bedRequest.patientId,
+      bedId: targetBedId,
+      ward: bed.ward
+    });
 
     res.status(200).json({
       success: true,
-      bedRequest
+      bedRequest,
+      message: 'Request approved and patient admitted successfully'
     });
   } catch (error) {
     console.error('Approve request error:', error);

@@ -467,6 +467,7 @@ const Emergency = () => {
                       <option value="ICU">ICU</option>
                       <option value="Cardiology">Cardiology</option>
                       <option value="Emergency">Emergency</option>
+                      <option value="General Ward">General Ward</option>
                     </select>
                   </div>
                 )}

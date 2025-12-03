@@ -8,6 +8,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line
 } from 'recharts';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const Reports = () => {
   const { user } = useAuth();
@@ -45,6 +47,62 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(20);
+    doc.text('Hospital Utilization Report', 14, 22);
+    
+    // Date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Period: ${timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}`, 14, 35);
+
+    // Summary Metrics
+    doc.setFontSize(14);
+    doc.text('Summary Metrics', 14, 45);
+    
+    doc.setFontSize(10);
+    const overallOccupancy = utilizationData?.overall?.utilizationPercentage || 0;
+    const totalAdmissions = utilizationData?.wardBreakdown?.reduce((acc, curr) => acc + curr.totalAdmissions, 0) || 0;
+    const totalDischarges = utilizationData?.wardBreakdown?.reduce((acc, curr) => acc + curr.totalDischarges, 0) || 0;
+
+    doc.text(`Overall Occupancy: ${overallOccupancy}%`, 14, 55);
+    doc.text(`Total Admissions: ${totalAdmissions}`, 80, 55);
+    doc.text(`Total Discharges: ${totalDischarges}`, 140, 55);
+
+    // Detailed Table
+    doc.setFontSize(14);
+    doc.text('Ward Breakdown', 14, 70);
+
+    const tableColumn = ["Ward", "Total Beds", "Occupied", "Occupancy %", "Admissions", "Discharges", "Turnover"];
+    const tableRows = [];
+
+    utilizationData?.wardBreakdown?.forEach(ward => {
+      const wardData = [
+        ward.ward,
+        ward.totalBeds,
+        ward.currentOccupied,
+        `${ward.avgOccupancyPercentage}%`,
+        ward.totalAdmissions,
+        ward.totalDischarges,
+        ward.turnoverRate
+      ];
+      tableRows.push(wardData);
+    });
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 75,
+      theme: 'grid',
+      headStyles: { fillColor: [13, 110, 253] } // Primary blue
+    });
+
+    doc.save(`hospital_report_${timeRange}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   if (!canViewReports(user)) {
@@ -91,6 +149,7 @@ const Reports = () => {
           </div>
 
           <button
+            onClick={handleExportPDF}
             className="primary-btn"
             style={{
               display: 'flex',
